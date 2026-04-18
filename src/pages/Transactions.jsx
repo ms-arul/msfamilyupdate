@@ -387,33 +387,37 @@ export default function Transactions() {
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: 20 }}
-                  className="grid grid-cols-1 sm:grid-cols-12 gap-2 sm:gap-3 px-5 py-4 hover:bg-slate-50/80 transition-all duration-200 group cursor-pointer items-center"
+                  className="flex flex-col sm:grid sm:grid-cols-12 gap-1 sm:gap-3 px-4 sm:px-5 py-3.5 sm:py-4 hover:bg-slate-50/80 transition-all duration-200 group cursor-pointer sm:items-center"
                   onClick={() => setSelectedTx(tx)}
                 >
-                  {/* Type indicator */}
-                  <div className="col-span-1 hidden sm:flex">
-                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
-                      tx.type === 'income' ? 'bg-emerald-50 text-emerald-500' : 'bg-rose-50 text-rose-500'
-                    }`}>
-                      {tx.type === 'income' ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />}
+                  <div className="flex justify-between items-center w-full sm:col-span-4">
+                    {/* Category Mobile+Desktop */}
+                    <div className="flex items-center gap-3 w-full">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                        tx.type === 'income' ? 'bg-emerald-50 text-emerald-500' : 'bg-rose-50 text-rose-500'
+                      }`}>
+                        {tx.type === 'income' ? <ArrowUpRight size={18} /> : <ArrowDownRight size={18} />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-sm text-slate-800 truncate">{tx.category}</p>
+                        <p className="text-[11px] text-slate-400 truncate max-w-[200px] sm:hidden mt-0.5">
+                          {tx.memberName} • {tx.date}
+                        </p>
+                        {tx.notes && <p className="text-[11px] text-slate-400 truncate max-w-[180px] hidden sm:block">{tx.notes}</p>}
+                      </div>
+                    </div>
+                    {/* Amount Mobile */}
+                    <div className="sm:hidden text-right pl-2 shrink-0">
+                       <span className={`font-black text-sm font-sans ${
+                        tx.type === 'income' ? 'text-emerald-600' : 'text-rose-600'
+                      }`}>
+                        {tx.type === 'income' ? '+' : '-'}₹{Number(tx.amount).toLocaleString()}
+                      </span>
                     </div>
                   </div>
 
-                  {/* Category */}
-                  <div className="col-span-3 flex items-center gap-2 sm:gap-0">
-                    <div className={`sm:hidden w-8 h-8 rounded-lg flex items-center justify-center ${
-                      tx.type === 'income' ? 'bg-emerald-50 text-emerald-500' : 'bg-rose-50 text-rose-500'
-                    }`}>
-                      {tx.type === 'income' ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
-                    </div>
-                    <div>
-                      <p className="font-semibold text-sm text-slate-800">{tx.category}</p>
-                      {tx.notes && <p className="text-[11px] text-slate-400 truncate max-w-[160px]">{tx.notes}</p>}
-                    </div>
-                  </div>
-
-                  {/* Amount */}
-                  <div className="col-span-2">
+                  {/* Amount Desktop */}
+                  <div className="hidden sm:block sm:col-span-2">
                     <span className={`font-bold text-sm font-sans ${
                       tx.type === 'income' ? 'text-emerald-600' : 'text-rose-600'
                     }`}>
@@ -421,12 +425,12 @@ export default function Transactions() {
                     </span>
                   </div>
 
-                  {/* Member */}
+                  {/* Member Desktop */}
                   <div className="col-span-2 hidden sm:block">
                     <span className="text-sm text-slate-600">{tx.memberName}</span>
                   </div>
 
-                  {/* Date & Time */}
+                  {/* Date & Time Desktop */}
                   <div className="col-span-2 hidden sm:flex flex-col justify-center">
                     <span className="text-sm text-slate-600 font-semibold">{tx.date}</span>
                     <span className="text-[10px] text-slate-400 font-bold tracking-widest uppercase mt-0.5">
@@ -434,8 +438,8 @@ export default function Transactions() {
                     </span>
                   </div>
 
-                  {/* Actions */}
-                  <div className="col-span-2 flex justify-end gap-1.5">
+                  {/* Actions Desktop */}
+                  <div className="hidden sm:flex sm:col-span-2 justify-end gap-1.5 focus-within:opacity-100">
                     <button
                       onClick={(e) => { e.stopPropagation(); setSelectedTx(tx); }}
                       className="p-2 rounded-lg text-slate-400 hover:text-primary-500 hover:bg-primary-50 transition-all opacity-0 group-hover:opacity-100"

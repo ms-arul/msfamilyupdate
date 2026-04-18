@@ -35,6 +35,7 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const fetchProfile = async (authUser) => {
+    setLoading(true);
     try {
       const { data, error } = await supabase
         .from('profiles')
@@ -72,6 +73,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const signUp = async (email, password, fullName) => {
+    setLoading(true);
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -81,16 +83,23 @@ export const AuthProvider = ({ children }) => {
         },
       },
     });
-    if (error) throw error;
+    if (error) {
+      setLoading(false);
+      throw error;
+    }
     return data;
   };
 
   const login = async (email, password) => {
+    setLoading(true);
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
-    if (error) throw error;
+    if (error) {
+      setLoading(false);
+      throw error;
+    }
     return data;
   };
 

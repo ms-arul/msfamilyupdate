@@ -1,5 +1,6 @@
-import React, { useMemo, useCallback } from 'react';
-import { useFinance } from '../context/FinanceContext';
+import React, { useMemo, useCallback, useState, useEffect } from 'react';
+import { supabase } from '../lib/supabase';
+import { useAuth } from '../context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   User,
@@ -165,15 +166,71 @@ const item = {
 // Main Component
 // ============================================================================
 export default function FamilyOverview() {
-  const { transactions = [], totalIncome = 0, totalExpense = 0, balance = 0 } =
-    useFinance();
+  const { user } = useAuth();
+  const [allTransactions, setAllTransactions] = useState([]);
+  const [allProfiles, setAllProfiles] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Aggregate member statistics (memoized)
+  // Fetch ALL transactions and ALL profiles from Supabase (no member_id filter)
+  useEffect(() => {
+    async function fetchFamilyData() {
+      setIsLoading(true);
+      try {
+        const [txRes, profileRes] = await Promise.all([
+          supabase
+            .from('transactions')
+            .select(`*, profiles:member_id ( name )`)
+            .order('date', { ascending: false }),
+          supabase
+            .from('profiles')
+            .select('id, name')
+        ]);
+
+        if (txRes.error) throw txRes.error;
+        if (profileRes.error) throw profileRes.error;
+
+        const mapped = (txRes.data || []).map(tx => ({
+          id: tx.id,
+          amount: Number(tx.amount),
+          category: tx.category,
+          type: tx.type,
+          date: tx.date,
+          notes: tx.notes,
+          memberId: tx.member_id,
+          memberName: tx.profiles?.name || 'Unknown',
+          created_at: tx.created_at,
+        }));
+
+        setAllTransactions(mapped);
+        setAllProfiles(profileRes.data || []);
+      } catch (err) {
+        console.error('Error fetching family data:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    fetchFamilyData();
+  }, [user]);
+
+  // Aggregate member statistics from ALL transactions
   const memberStatsMap = useMemo(() => {
     const map = new Map();
-    transactions.forEach((tx) => {
-      const key = tx.memberId || tx.memberName;
-      if (!key) return; // skip if no member identifier
+
+    // Seed the map with every profile so members with 0 transactions still appear
+    allProfiles.forEach(p => {
+      map.set(p.id, {
+        id: p.id,
+        name: p.name || 'Unknown',
+        income: 0,
+        expense: 0,
+        txCount: 0,
+      });
+    });
+
+    // Accumulate transaction amounts
+    allTransactions.forEach((tx) => {
+      const key = tx.memberId;
+      if (!key) return;
 
       if (!map.has(key)) {
         map.set(key, {
@@ -190,12 +247,17 @@ export default function FamilyOverview() {
       stat.txCount += 1;
     });
     return map;
-  }, [transactions]);
+  }, [allTransactions, allProfiles]);
 
   const members = useMemo(
     () => Array.from(memberStatsMap.values()),
     [memberStatsMap]
   );
+
+  // These totals are across ALL members
+  const totalIncome = useMemo(() => allTransactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0), [allTransactions]);
+  const totalExpense = useMemo(() => allTransactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0), [allTransactions]);
+  const balance = totalIncome - totalExpense;
 
   // Top performers (memoized)
   const topEarner = useMemo(
@@ -265,6 +327,23 @@ export default function FamilyOverview() {
     'from-warning-500 to-amber-700',
   ];
 
+  // Loading state
+  if (isLoading) {
+    return (
+      <motion.div
+        variants={container}
+        initial="hidden"
+        animate="show"
+        className="space-y-6"
+      >
+        <motion.div variants={item} className="glass-panel p-12 text-center">
+          <div className="animate-spin w-8 h-8 border-4 border-primary-500/30 border-t-primary-500 rounded-full mx-auto mb-4" />
+          <p className="text-slate-500 font-medium">Loading family data...</p>
+        </motion.div>
+      </motion.div>
+    );
+  }
+
   // Empty state
   if (members.length === 0) {
     return (
@@ -309,9 +388,9 @@ export default function FamilyOverview() {
             Your family's combined financial health at a glance
           </p>
 
-          <div className="grid grid-cols-3 gap-4 mt-6">
-            <div>
-              <p className="text-xs text-slate-600 font-semibold uppercase tracking-wider">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mt-5 sm:mt-6">
+            <div className="col-span-2 lg:col-span-1 p-3 sm:p-0 bg-white/50 sm:bg-transparent rounded-xl sm:rounded-none">
+              <p className="text-[10px] sm:text-xs text-slate-600 font-semibold uppercase tracking-wider">
                 Net Savings
               </p>
               <p
@@ -321,19 +400,19 @@ export default function FamilyOverview() {
                 ₹{balance.toLocaleString()}
               </p>
             </div>
-            <div>
-              <p className="text-xs text-slate-600 font-semibold uppercase tracking-wider">
+            <div className="p-3 sm:p-0 bg-white/50 sm:bg-transparent rounded-xl sm:rounded-none">
+              <p className="text-[10px] sm:text-xs text-slate-600 font-semibold uppercase tracking-wider">
                 Total In
               </p>
-              <p className="text-2xl sm:text-3xl font-extrabold font-sans mt-1 text-success-400">
+              <p className="text-xl sm:text-3xl font-extrabold font-sans mt-1 text-success-400 truncate">
                 ₹{totalIncome.toLocaleString()}
               </p>
             </div>
-            <div>
-              <p className="text-xs text-slate-600 font-semibold uppercase tracking-wider">
+            <div className="p-3 sm:p-0 bg-white/50 sm:bg-transparent rounded-xl sm:rounded-none">
+              <p className="text-[10px] sm:text-xs text-slate-600 font-semibold uppercase tracking-wider">
                 Total Out
               </p>
-              <p className="text-2xl sm:text-3xl font-extrabold font-sans mt-1 text-accent-400">
+              <p className="text-xl sm:text-3xl font-extrabold font-sans mt-1 text-accent-400 truncate">
                 ₹{totalExpense.toLocaleString()}
               </p>
             </div>

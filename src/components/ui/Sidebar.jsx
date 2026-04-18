@@ -125,13 +125,12 @@ export const MobileSidebar = ({ mobileOpen, setMobileOpen, handleLogout }) => (
   <AnimatePresence>
     {mobileOpen && (
       <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
+        initial={{ opacity: 0, pointerEvents: 'none' }}
+        animate={{ opacity: 1, pointerEvents: 'auto' }}
+        exit={{ opacity: 0, pointerEvents: 'none' }}
         transition={{ duration: 0.2 }}
-        className="md:hidden fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm"
+        className="md:hidden fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex justify-start"
         onClick={() => setMobileOpen(false)}
-        aria-hidden="true"
       >
         <motion.div
           initial={{ x: -300 }}
@@ -147,7 +146,7 @@ export const MobileSidebar = ({ mobileOpen, setMobileOpen, handleLogout }) => (
             <img src="/mslogo.png" alt="MS Logo" className="w-8 h-8 object-contain" />
             <h1 className="text-xl font-bold text-gradient">MS Family</h1>
           </div>
-          <nav className="flex-1">
+          <nav className="flex-1 overflow-y-auto">
             {navItems.map((item) => (
               <SidebarItem key={item.to} {...item} onClick={() => setMobileOpen(false)} />
             ))}

@@ -267,56 +267,58 @@ export default function Loans() {
       </motion.div>
 
       {/* KPI Stats */}
-      <motion.div variants={item} className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <motion.div variants={item} className="grid grid-cols-2 sm:grid-cols-3 gap-3 md:gap-4">
         {/* Total Lent (To Receive) */}
-        <div className="glass-panel p-5 relative overflow-hidden group">
+        <div className="glass-panel p-3.5 sm:p-5 relative overflow-hidden group">
           <div className="absolute -right-4 -top-4 w-16 h-16 rounded-full bg-emerald-500/20 blur-xl transition-all duration-500 opacity-50 group-hover:opacity-100" />
-          <div className="flex items-center gap-3 mb-2 relative z-10">
-            <div className="p-2 bg-emerald-50 rounded-xl text-emerald-500">
-              <Banknote size={20} />
+          <div className="flex items-center gap-2 sm:gap-3 mb-1.5 sm:mb-2 relative z-10">
+            <div className="p-1.5 sm:p-2 bg-emerald-50 rounded-lg sm:rounded-xl text-emerald-500 shrink-0">
+              <Banknote size={16} className="sm:w-5 sm:h-5" />
             </div>
-            <p className="text-[10px] md:text-xs text-slate-500 font-bold uppercase tracking-widest">
-              To Receive (Lent)
+            <p className="text-[9px] sm:text-xs text-slate-500 font-bold uppercase tracking-widest truncate">
+              To Receive
             </p>
           </div>
-          <p className="text-3xl font-black font-sans text-emerald-600 relative z-10">
+          <p className="text-xl sm:text-3xl font-black font-sans text-emerald-600 relative z-10 truncate">
             ₹{stats.totalLent.toLocaleString()}
           </p>
         </div>
 
         {/* Total Borrowed (To Pay) */}
-        <div className="glass-panel p-5 relative overflow-hidden group">
+        <div className="glass-panel p-3.5 sm:p-5 relative overflow-hidden group">
           <div className="absolute -right-4 -top-4 w-16 h-16 rounded-full bg-rose-500/20 blur-xl transition-all duration-500 opacity-50 group-hover:opacity-100" />
-          <div className="flex items-center gap-3 mb-2 relative z-10">
-            <div className="p-2 bg-rose-50 rounded-xl text-rose-500">
-              <HandCoins size={20} />
+          <div className="flex items-center gap-2 sm:gap-3 mb-1.5 sm:mb-2 relative z-10">
+            <div className="p-1.5 sm:p-2 bg-rose-50 rounded-lg sm:rounded-xl text-rose-500 shrink-0">
+              <HandCoins size={16} className="sm:w-5 sm:h-5" />
             </div>
-            <p className="text-[10px] md:text-xs text-slate-500 font-bold uppercase tracking-widest">
-              To Pay (Borrowed)
+            <p className="text-[9px] sm:text-xs text-slate-500 font-bold uppercase tracking-widest truncate">
+              To Pay
             </p>
           </div>
-          <p className="text-3xl font-black font-sans text-rose-600 relative z-10">
+          <p className="text-xl sm:text-3xl font-black font-sans text-rose-600 relative z-10 truncate">
             ₹{stats.totalBorrowed.toLocaleString()}
           </p>
         </div>
 
         {/* Net Balance */}
-        <div className="glass-panel p-5 relative overflow-hidden group">
+        <div className="glass-panel p-3.5 sm:p-5 relative overflow-hidden group col-span-2 sm:col-span-1">
           <div className={`absolute -right-4 -top-4 w-16 h-16 rounded-full blur-xl transition-all duration-500 opacity-50 group-hover:opacity-100 ${stats.net >= 0 ? 'bg-indigo-500/20' : 'bg-rose-500/20'
             }`} />
-          <div className="flex items-center gap-3 mb-2 relative z-10">
-            <div className={`p-2 rounded-xl border ${stats.net >= 0 ? 'bg-indigo-50 text-indigo-500 border-indigo-100' : 'bg-rose-50 text-rose-500 border-rose-100'
+          <div className="flex items-center gap-2 sm:gap-3 mb-1.5 sm:mb-2 relative z-10">
+            <div className={`p-1.5 sm:p-2 rounded-lg sm:rounded-xl border shrink-0 ${stats.net >= 0 ? 'bg-indigo-50 text-indigo-500 border-indigo-100' : 'bg-rose-50 text-rose-500 border-rose-100'
               }`}>
-              <Wallet size={20} />
+              <Wallet size={16} className="sm:w-5 sm:h-5" />
             </div>
-            <p className="text-[10px] md:text-xs text-slate-500 font-bold uppercase tracking-widest">
+            <p className="text-[9px] sm:text-xs text-slate-500 font-bold uppercase tracking-widest truncate">
               Net Balance
             </p>
           </div>
-          <p className={`text-3xl font-black font-sans relative z-10 ${stats.net >= 0 ? 'text-indigo-600' : 'text-rose-600'
-            }`}>
-            {stats.net >= 0 ? '+' : ''}₹{stats.net.toLocaleString()}
-          </p>
+          <div className="flex items-baseline gap-1 relative z-10">
+            <p className={`text-2xl sm:text-3xl font-black font-sans truncate ${stats.net >= 0 ? 'text-indigo-600' : 'text-rose-600'
+              }`}>
+              {stats.net >= 0 ? '+' : ''}₹{stats.net.toLocaleString()}
+            </p>
+          </div>
         </div>
       </motion.div>
 
@@ -384,63 +386,63 @@ export default function Loans() {
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.98 }}
                       key={loan.id}
-                      className={`p-4 sm:p-5 flex flex-col sm:flex-row gap-4 sm:items-center justify-between transition-colors ${isSettled ? 'bg-slate-50/50 grayscale-[0.3] opacity-75' : 'hover:bg-slate-50'
+                      className={`p-3.5 sm:p-5 flex flex-col sm:flex-row gap-3 sm:gap-4 sm:items-center justify-between transition-colors ${isSettled ? 'bg-slate-50/50 grayscale-[0.3] opacity-75' : 'hover:bg-slate-50'
                         }`}
                     >
-                      <div className="flex items-center gap-4 flex-1">
-                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-sm border ${isSettled
+                      <div className="flex items-start sm:items-center gap-3 sm:gap-4 flex-1">
+                        <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0 shadow-sm border ${isSettled
                           ? 'bg-slate-100 text-slate-400 border-slate-200'
                           : isLent
                             ? 'bg-emerald-50 text-emerald-500 border-emerald-100 shadow-emerald-500/10'
                             : 'bg-rose-50 text-rose-500 border-rose-100 shadow-rose-500/10'
                           }`}>
-                          {isSettled ? <CheckCircle2 size={24} /> : isLent ? <ArrowRightLeft size={20} className="rotate-45" /> : <ArrowRightLeft size={20} className="-rotate-45" />}
+                          {isSettled ? <CheckCircle2 size={18} className="sm:w-6 sm:h-6" /> : isLent ? <ArrowRightLeft size={16} className="rotate-45 sm:w-5 sm:h-5" /> : <ArrowRightLeft size={16} className="-rotate-45 sm:w-5 sm:h-5" />}
                         </div>
 
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <h3 className={`text-base font-bold truncate ${isSettled ? 'text-slate-500 line-through decoration-slate-300' : 'text-slate-900'}`}>
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-1">
+                            <h3 className={`text-sm sm:text-base font-bold truncate max-w-[140px] sm:max-w-xs ${isSettled ? 'text-slate-500 line-through decoration-slate-300' : 'text-slate-900'}`}>
                               {loan.person}
                             </h3>
-                            <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${isSettled
+                            <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md whitespace-nowrap ${isSettled
                               ? 'bg-slate-200 text-slate-600'
                               : isLent
                                 ? 'bg-emerald-100 text-emerald-700'
                                 : 'bg-rose-100 text-rose-700'
                               }`}>
-                              {isSettled ? 'Settled' : isLent ? 'You Lent' : 'You Borrowed'}
+                              {isSettled ? 'Settled' : isLent ? 'Lent' : 'Borrowed'}
                             </span>
                             {loan.loan_category && loan.loan_category !== 'Standard' && (
-                              <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                              <span className={`text-[8.5px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md whitespace-nowrap ${
                                 loan.loan_category === 'EMI'
                                   ? 'bg-violet-100 text-violet-700 border border-violet-200'
                                   : 'bg-amber-100 text-amber-700 border border-amber-200'
                               }`}>
-                                {loan.loan_category === 'EMI' ? '📅 EMI' : '📆 Weekly'}
+                                {loan.loan_category === 'EMI' ? '📅 EMI' : '📆 Wkly'}
                               </span>
                             )}
                           </div>
-                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
-                            <span className="flex items-center gap-1"><Calendar size={12} /> {loan.date}</span>
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] sm:text-xs text-slate-500">
+                            <span className="flex items-center gap-1 shrink-0"><Calendar size={11} className="sm:w-3 sm:h-3" /> {loan.date}</span>
                             {loan.due_date && !isSettled && (
-                              <span className="flex items-center gap-1 text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/50">
+                              <span className="flex items-center gap-1 text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/50 shrink-0">
                                 <AlertCircle size={10} /> Due: {loan.due_date}
                               </span>
                             )}
-                            {loan.notes && <span className="truncate max-w-[200px] border-l border-slate-300 pl-2">{loan.notes}</span>}
+                            {loan.notes && <span className="truncate max-w-[150px] sm:max-w-[200px] border-l border-slate-300 pl-2 shrink-0">{loan.notes}</span>}
                           </div>
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-between sm:justify-end gap-6 sm:pl-4 sm:border-l border-slate-100">
+                      <div className="flex items-center justify-between sm:justify-end w-full sm:w-auto mt-2 sm:mt-0 sm:pl-4 sm:border-l border-slate-100 pt-3 sm:pt-0 border-t sm:border-t-0 border-slate-100/60">
                         <div className="text-left sm:text-right">
-                          <p className={`text-xl font-black font-sans ${isSettled ? 'text-slate-400' : isLent ? 'text-emerald-600' : 'text-rose-600'
+                          <p className={`text-lg sm:text-xl font-black font-sans leading-none ${isSettled ? 'text-slate-400' : isLent ? 'text-emerald-600' : 'text-rose-600'
                             }`}>
                             ₹{loan.amount.toLocaleString()}
                           </p>
                           {loan.interest_rate > 0 && (
-                            <p className="text-[10px] font-bold text-violet-500 mt-0.5">
-                              {loan.interest_rate}% interest
+                            <p className="text-[9px] sm:text-[10px] font-bold text-violet-500 mt-1 sm:mt-0.5">
+                              {loan.interest_rate}% int
                             </p>
                           )}
                         </div>

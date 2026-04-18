@@ -127,9 +127,16 @@ export default function Login() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [acceptTerms, setAcceptTerms] = useState(false);
-  const { login, signUp } = useAuth();
+  const { login, signUp, user } = useAuth();
   const navigate = useNavigate();
   const emailInputRef = useRef(null);
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (user) {
+      navigate('/', { replace: true });
+    }
+  }, [user, navigate]);
 
   // Load saved email if "remember me" was checked
   useEffect(() => {

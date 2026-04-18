@@ -97,8 +97,8 @@ export default function MyProofs() {
 
   const filteredProofs = proofs.filter(p => {
     const matchesCategory = activeCategory === 'all' || p.category === activeCategory;
-    const matchesSearch = p.title?.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          p.document_number?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = p.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.document_number?.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesCategory && matchesSearch;
   });
 
@@ -111,7 +111,7 @@ export default function MyProofs() {
   const closeLightbox = () => {
     setActiveProof(null);
     setZoomLevel(1);
-    document.body.style.overflow = 'auto';
+    document.body.style.overflow = '';
   };
 
   const openDetails = (e, proof) => {
@@ -177,7 +177,7 @@ export default function MyProofs() {
       };
 
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -245,16 +245,21 @@ export default function MyProofs() {
         }],
         generationConfig: { response_mime_type: 'application/json', temperature: 0.1 },
       };
+      
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
         { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestBody) }
       );
+      
       if (!response.ok) return null;
+      
       const data = await response.json();
       const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
       const clean = text.replace(/```json/g, '').replace(/```/g, '').trim();
       return JSON.parse(clean);
-    } catch { return null; }
+    } catch { 
+      return null; 
+    }
   };
 
   const saveDocument = async () => {
@@ -486,118 +491,118 @@ export default function MyProofs() {
                 className="bg-white rounded-3xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl relative"
               >
                 <div className="sticky top-0 z-10 p-5 border-b border-slate-100 flex justify-between items-center bg-white/95 backdrop-blur-md rounded-t-3xl">
-                <h3 className="font-bold text-lg flex items-center gap-2">
-                  <UploadCloud size={20} className="text-primary-500" />
-                  Upload Proof
-                </h3>
-                {!isUploading && (
-                  <button onClick={() => setShowUploadModal(false)} className="p-2 hover:bg-slate-200 rounded-lg text-slate-500">
-                    <X size={18} />
-                  </button>
-                )}
-              </div>
-
-              <div className="p-5 space-y-4">
-                {isUploading && uploadProgress.includes('Analyzing') ? (
-                  <div className="flex flex-col items-center justify-center py-10 text-center">
-                    <div className="w-16 h-16 rounded-2xl bg-primary-100 flex items-center justify-center mb-4">
-                      <Loader2 size={32} className="animate-spin text-primary-600" />
-                    </div>
-                    <h4 className="font-bold text-slate-800">Please wait, reading...</h4>
-                    <p className="text-sm text-slate-500 mt-1">{uploadProgress}</p>
-                  </div>
-                ) : (
-                  <>
-                    {/* Front & Back Preview Side by Side */}
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Front Side</p>
-                        <div className="aspect-[1.58] bg-slate-100 rounded-xl overflow-hidden border border-border relative">
-                          {newProofForm.imageUrl ? (
-                            <img src={newProofForm.imageUrl} className="w-full h-full object-cover" alt="Front" />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-slate-300 text-xs">No image</div>
-                          )}
-                        </div>
-                      </div>
-                      <div>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Back Side</p>
-                        <div
-                          onClick={() => backInputRef.current?.click()}
-                          className="aspect-[1.58] bg-slate-50 rounded-xl overflow-hidden border-2 border-dashed border-slate-200 relative cursor-pointer hover:border-primary-300 hover:bg-primary-50/30 transition-all group"
-                        >
-                          {newProofForm.backImageUrl ? (
-                            <img src={newProofForm.backImageUrl} className="w-full h-full object-cover" alt="Back" />
-                          ) : (
-                            <div className="w-full h-full flex flex-col items-center justify-center gap-1 text-slate-400 group-hover:text-primary-500 transition-colors">
-                              <Plus size={20} />
-                              <span className="text-[10px] font-semibold">Add Back</span>
-                            </div>
-                          )}
-                        </div>
-                        <input type="file" ref={backInputRef} className="hidden" accept="image/*" onChange={handleBackImageUpload} />
-                      </div>
-                    </div>
-
-                    {isUploading && (
-                      <div className="flex items-center justify-center gap-2 p-3 bg-primary-50 rounded-xl text-sm font-semibold text-primary-700">
-                        <Loader2 size={16} className="animate-spin" />
-                        {uploadProgress}
-                      </div>
-                    )}
-
-                    <div>
-                      <label className="text-xs font-bold text-slate-500 uppercase">Document Title</label>
-                      <input
-                        type="text"
-                        value={newProofForm.title}
-                        onChange={e => setNewProofForm({ ...newProofForm, title: e.target.value })}
-                        className="w-full p-3 rounded-xl border border-slate-200 bg-slate-50 mt-1 focus:outline-none focus:border-primary-500"
-                        placeholder="e.g. Aadhar Card"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-xs font-bold text-slate-500 uppercase">Document ID Number</label>
-                      <input
-                        type="text"
-                        value={newProofForm.documentNumber}
-                        onChange={e => setNewProofForm({ ...newProofForm, documentNumber: e.target.value })}
-                        className="w-full p-3 rounded-xl border border-slate-200 bg-slate-50 mt-1 focus:outline-none focus:border-primary-500 font-mono tracking-wider"
-                        placeholder="1234 5678"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-xs font-bold text-slate-500 uppercase">Category</label>
-                      <select
-                        value={newProofForm.category}
-                        onChange={e => setNewProofForm({ ...newProofForm, category: e.target.value })}
-                        className="w-full p-3 rounded-xl border border-slate-200 bg-slate-50 mt-1 focus:outline-none focus:border-primary-500"
-                      >
-                        <option value="identity">Identity</option>
-                        <option value="financial">Financial (Bills, Pan)</option>
-                        <option value="vehicle">Vehicle (RC, DL)</option>
-                      </select>
-                    </div>
-
-                    <button
-                      onClick={saveDocument}
-                      disabled={isUploading || !newProofForm.title}
-                      className="w-full bg-primary-600 hover:bg-primary-500 disabled:opacity-50 text-white font-bold p-3.5 rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-primary-500/20"
-                    >
-                      {isUploading ? <Loader2 className="animate-spin" size={18} /> : <CheckCircle2 size={18} />}
-                      {isUploading ? 'Saving...' : 'Save to Locker'}
+                  <h3 className="font-bold text-lg flex items-center gap-2">
+                    <UploadCloud size={20} className="text-primary-500" />
+                    Upload Proof
+                  </h3>
+                  {!isUploading && (
+                    <button onClick={() => setShowUploadModal(false)} className="p-2 hover:bg-slate-200 rounded-lg text-slate-500">
+                      <X size={18} />
                     </button>
-                  </>
-                )}
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>,
-      document.body
-    )}
+                  )}
+                </div>
+
+                <div className="p-5 space-y-4">
+                  {isUploading && uploadProgress.includes('Analyzing') ? (
+                    <div className="flex flex-col items-center justify-center py-10 text-center">
+                      <div className="w-16 h-16 rounded-2xl bg-primary-100 flex items-center justify-center mb-4">
+                        <Loader2 size={32} className="animate-spin text-primary-600" />
+                      </div>
+                      <h4 className="font-bold text-slate-800">Please wait, reading...</h4>
+                      <p className="text-sm text-slate-500 mt-1">{uploadProgress}</p>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Front & Back Preview Side by Side */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Front Side</p>
+                          <div className="aspect-[1.58] bg-slate-100 rounded-xl overflow-hidden border border-border relative">
+                            {newProofForm.imageUrl ? (
+                              <img src={newProofForm.imageUrl} className="w-full h-full object-cover" alt="Front" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-slate-300 text-xs">No image</div>
+                            )}
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Back Side</p>
+                          <div
+                            onClick={() => backInputRef.current?.click()}
+                            className="aspect-[1.58] bg-slate-50 rounded-xl overflow-hidden border-2 border-dashed border-slate-200 relative cursor-pointer hover:border-primary-300 hover:bg-primary-50/30 transition-all group"
+                          >
+                            {newProofForm.backImageUrl ? (
+                              <img src={newProofForm.backImageUrl} className="w-full h-full object-cover" alt="Back" />
+                            ) : (
+                              <div className="w-full h-full flex flex-col items-center justify-center gap-1 text-slate-400 group-hover:text-primary-500 transition-colors">
+                                <Plus size={20} />
+                                <span className="text-[10px] font-semibold">Add Back</span>
+                              </div>
+                            )}
+                          </div>
+                          <input type="file" ref={backInputRef} className="hidden" accept="image/*" onChange={handleBackImageUpload} />
+                        </div>
+                      </div>
+
+                      {isUploading && (
+                        <div className="flex items-center justify-center gap-2 p-3 bg-primary-50 rounded-xl text-sm font-semibold text-primary-700">
+                          <Loader2 size={16} className="animate-spin" />
+                          {uploadProgress}
+                        </div>
+                      )}
+
+                      <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase">Document Title</label>
+                        <input
+                          type="text"
+                          value={newProofForm.title}
+                          onChange={e => setNewProofForm({ ...newProofForm, title: e.target.value })}
+                          className="w-full p-3 rounded-xl border border-slate-200 bg-slate-50 mt-1 focus:outline-none focus:border-primary-500"
+                          placeholder="e.g. Aadhar Card"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase">Document ID Number</label>
+                        <input
+                          type="text"
+                          value={newProofForm.documentNumber}
+                          onChange={e => setNewProofForm({ ...newProofForm, documentNumber: e.target.value })}
+                          className="w-full p-3 rounded-xl border border-slate-200 bg-slate-50 mt-1 focus:outline-none focus:border-primary-500 font-mono tracking-wider"
+                          placeholder="1234 5678"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase">Category</label>
+                        <select
+                          value={newProofForm.category}
+                          onChange={e => setNewProofForm({ ...newProofForm, category: e.target.value })}
+                          className="w-full p-3 rounded-xl border border-slate-200 bg-slate-50 mt-1 focus:outline-none focus:border-primary-500"
+                        >
+                          <option value="identity">Identity</option>
+                          <option value="financial">Financial (Bills, Pan)</option>
+                          <option value="vehicle">Vehicle (RC, DL)</option>
+                        </select>
+                      </div>
+
+                      <button
+                        onClick={saveDocument}
+                        disabled={isUploading || !newProofForm.title}
+                        className="w-full bg-primary-600 hover:bg-primary-500 disabled:opacity-50 text-white font-bold p-3.5 rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-primary-500/20"
+                      >
+                        {isUploading ? <Loader2 className="animate-spin" size={18} /> : <CheckCircle2 size={18} />}
+                        {isUploading ? 'Saving...' : 'Save to Locker'}
+                      </button>
+                    </>
+                  )}
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
 
       {/* FULL SCREEN LIGHTBOX - LIGHT THEME */}
       {createPortal(
@@ -667,57 +672,57 @@ export default function MyProofs() {
                 </div>
               </div>
 
-            {/* Image area */}
-            <div className="flex-1 flex flex-col items-center p-4 pt-[6.5rem] md:pt-28 pb-20 w-full overflow-auto" onClick={e => e.stopPropagation()}>
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="flex flex-col items-center w-full transition-all duration-200 ease-out"
-                style={{
-                  width: `${zoomLevel * 100}%`,
-                  maxWidth: zoomLevel <= 1 ? '56rem' : `${56 * zoomLevel}rem`
-                }}
-              >
-                {/* Front image */}
-                <div className="w-full rounded-2xl overflow-hidden shadow-xl border border-slate-200 bg-white mb-4">
-                  <img
-                    src={activeProof.image_url}
-                    alt={`${activeProof.title} - Front`}
-                    className="w-full object-contain transition-all duration-200"
-                    style={{ maxHeight: zoomLevel <= 1 ? '75vh' : 'none' }}
-                  />
-                </div>
-
-                {/* Back image if exists */}
-                {activeProof.back_image_url && (
-                  <div className="w-full rounded-2xl overflow-hidden shadow-xl border border-slate-200 bg-white">
+              {/* Image area */}
+              <div className="flex-1 flex flex-col items-center p-4 pt-[6.5rem] md:pt-28 pb-20 w-full overflow-auto" onClick={e => e.stopPropagation()}>
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex flex-col items-center w-full transition-all duration-200 ease-out"
+                  style={{
+                    width: `${zoomLevel * 100}%`,
+                    maxWidth: zoomLevel <= 1 ? '56rem' : `${56 * zoomLevel}rem`
+                  }}
+                >
+                  {/* Front image */}
+                  <div className="w-full rounded-2xl overflow-hidden shadow-xl border border-slate-200 bg-white mb-4">
                     <img
-                      src={activeProof.back_image_url}
-                      alt={`${activeProof.title} - Back`}
+                      src={activeProof.image_url}
+                      alt={`${activeProof.title} - Front`}
                       className="w-full object-contain transition-all duration-200"
                       style={{ maxHeight: zoomLevel <= 1 ? '75vh' : 'none' }}
                     />
                   </div>
-                )}
-              </motion.div>
-            </div>
 
-            {/* Bottom bar - download only */}
-            <div className="fixed bottom-0 left-0 right-0 z-50 p-4 bg-white/90 backdrop-blur-md border-t border-slate-100 flex justify-center" onClick={e => e.stopPropagation()}>
-              <a
-                href={activeProof.image_url}
-                download={`${activeProof.title}.jpg`}
-                className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white px-6 py-3 rounded-xl font-semibold transition-all shadow-xl active:scale-95 text-sm"
-              >
-                <Download size={16} />
-                Download Document
-              </a>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>,
-      document.body
-    )}
+                  {/* Back image if exists */}
+                  {activeProof.back_image_url && (
+                    <div className="w-full rounded-2xl overflow-hidden shadow-xl border border-slate-200 bg-white">
+                      <img
+                        src={activeProof.back_image_url}
+                        alt={`${activeProof.title} - Back`}
+                        className="w-full object-contain transition-all duration-200"
+                        style={{ maxHeight: zoomLevel <= 1 ? '75vh' : 'none' }}
+                      />
+                    </div>
+                  )}
+                </motion.div>
+              </div>
+
+              {/* Bottom bar - download only */}
+              <div className="fixed bottom-0 left-0 right-0 z-50 p-4 bg-white/90 backdrop-blur-md border-t border-slate-100 flex justify-center" onClick={e => e.stopPropagation()}>
+                <a
+                  href={activeProof.image_url}
+                  download={`${activeProof.title}.jpg`}
+                  className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white px-6 py-3 rounded-xl font-semibold transition-all shadow-xl active:scale-95 text-sm"
+                >
+                  <Download size={16} />
+                  Download Document
+                </a>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
 
       {/* AI Details Modal */}
       {createPortal(
@@ -725,60 +730,60 @@ export default function MyProofs() {
           {detailsProof && (
             <div className="fixed inset-0 z-[9999] bg-slate-900/40 backdrop-blur-sm flex items-end md:items-center justify-center" onClick={closeDetails}>
               <motion.div
-              initial={{ opacity: 0, y: 40 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 40 }}
-              onClick={e => e.stopPropagation()}
-              className="bg-white w-full max-w-md rounded-t-3xl md:rounded-3xl shadow-2xl max-h-[70vh] overflow-y-auto"
-            >
-              <div className="sticky top-0 bg-white/95 backdrop-blur-md p-5 border-b border-slate-100 flex justify-between items-center rounded-t-3xl z-10">
-                <h3 className="font-bold text-lg text-slate-900 flex items-center gap-2">
-                  Document Details
-                </h3>
-                <button onClick={closeDetails} className="p-2 rounded-xl hover:bg-slate-100 text-slate-400">
-                  <X size={18} />
-                </button>
-              </div>
-
-              <div className="p-5 space-y-4">
-                {/* Document Info */}
-                <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
-                  <div className="w-14 h-14 rounded-xl overflow-hidden border border-slate-200 shrink-0">
-                    <img src={detailsProof.image_url} alt="" className="w-full h-full object-cover" />
-                  </div>
-                  <div className="overflow-hidden">
-                    <p className="font-bold text-slate-800 truncate">{detailsProof.title}</p>
-                    <p className="font-mono text-xs text-slate-500 tracking-wider">{detailsProof.document_number}</p>
-                  </div>
+                initial={{ opacity: 0, y: 40 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 40 }}
+                onClick={e => e.stopPropagation()}
+                className="bg-white w-full max-w-md rounded-t-3xl md:rounded-3xl shadow-2xl max-h-[70vh] overflow-y-auto"
+              >
+                <div className="sticky top-0 bg-white/95 backdrop-blur-md p-5 border-b border-slate-100 flex justify-between items-center rounded-t-3xl z-10">
+                  <h3 className="font-bold text-lg text-slate-900 flex items-center gap-2">
+                    Document Details
+                  </h3>
+                  <button onClick={closeDetails} className="p-2 rounded-xl hover:bg-slate-100 text-slate-400">
+                    <X size={18} />
+                  </button>
                 </div>
 
-                {/* AI Summary Points */}
-                <div>
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">AI Summary</p>
-                  {detailsProof.ai_summary ? (
-                    <ul className="space-y-2.5">
-                      {JSON.parse(detailsProof.ai_summary).map((point, i) => (
-                        <li key={i} className="flex items-start gap-3 text-sm text-slate-700">
-                          <span className="shrink-0 w-6 h-6 rounded-lg bg-primary-50 text-primary-600 font-bold text-xs flex items-center justify-center mt-0.5 border border-primary-100">{i + 1}</span>
-                          <span className="leading-relaxed">{point}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <div className="text-center py-6 text-slate-400 text-sm">
-                      <Info size={24} className="mx-auto mb-2 text-slate-300" />
-                      <p>No summary available for this document.</p>
-                      <p className="text-xs mt-1">Re-upload to auto-generate.</p>
+                <div className="p-5 space-y-4">
+                  {/* Document Info */}
+                  <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                    <div className="w-14 h-14 rounded-xl overflow-hidden border border-slate-200 shrink-0">
+                      <img src={detailsProof.image_url} alt="" className="w-full h-full object-cover" />
                     </div>
-                  )}
+                    <div className="overflow-hidden">
+                      <p className="font-bold text-slate-800 truncate">{detailsProof.title}</p>
+                      <p className="font-mono text-xs text-slate-500 tracking-wider">{detailsProof.document_number}</p>
+                    </div>
+                  </div>
+
+                  {/* AI Summary Points */}
+                  <div>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">AI Summary</p>
+                    {detailsProof.ai_summary ? (
+                      <ul className="space-y-2.5">
+                        {JSON.parse(detailsProof.ai_summary).map((point, i) => (
+                          <li key={i} className="flex items-start gap-3 text-sm text-slate-700">
+                            <span className="shrink-0 w-6 h-6 rounded-lg bg-primary-50 text-primary-600 font-bold text-xs flex items-center justify-center mt-0.5 border border-primary-100">{i + 1}</span>
+                            <span className="leading-relaxed">{point}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <div className="text-center py-6 text-slate-400 text-sm">
+                        <Info size={24} className="mx-auto mb-2 text-slate-300" />
+                        <p>No summary available for this document.</p>
+                        <p className="text-xs mt-1">Re-upload to auto-generate.</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>,
-      document.body
-    )}
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
     </div>
   );
 }

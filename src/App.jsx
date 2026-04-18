@@ -9,9 +9,16 @@ import Analytics from './pages/Analytics';
 import CalendarView from './pages/CalendarView';
 import FamilyOverview from './pages/FamilyOverview';
 import MyProofs from './pages/MyProofs';
+import Notifications from './pages/Notifications';
 import Login from './pages/Login';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { FinanceProvider } from './context/FinanceContext';
+import { usePushNotifications } from './hooks/usePushNotifications';
+
+const PushNotificationSetup = () => {
+  usePushNotifications();
+  return null;
+};
 
 const ProtectedRoute = ({ children }) => {
   const { user } = useAuth();
@@ -26,6 +33,7 @@ function App() {
     <AuthProvider>
       <FinanceProvider>
         <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+          <PushNotificationSetup />
           <div className="bg-animated-gradient min-h-screen">
             <Routes>
               <Route path="/login" element={<Login />} />
@@ -38,6 +46,7 @@ function App() {
                 <Route path="calendar" element={<CalendarView />} />
                 <Route path="family" element={<FamilyOverview />} />
                 <Route path="proofs" element={<MyProofs />} />
+                <Route path="notifications" element={<Notifications />} />
               </Route>
             </Routes>
           </div>
