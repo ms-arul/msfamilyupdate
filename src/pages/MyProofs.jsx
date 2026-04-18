@@ -177,7 +177,7 @@ export default function MyProofs() {
       };
 
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -247,7 +247,7 @@ export default function MyProofs() {
       };
       
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
         { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestBody) }
       );
       
@@ -516,7 +516,7 @@ export default function MyProofs() {
                       {/* Front & Back Preview Side by Side */}
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Front Side</p>
+                          <p className="text-[11px] font-bold text-slate-600 uppercase tracking-widest mb-2">Front Side</p>
                           <div className="aspect-[1.58] bg-slate-100 rounded-xl overflow-hidden border border-border relative">
                             {newProofForm.imageUrl ? (
                               <img src={newProofForm.imageUrl} className="w-full h-full object-cover" alt="Front" />
@@ -526,7 +526,7 @@ export default function MyProofs() {
                           </div>
                         </div>
                         <div>
-                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Back Side</p>
+                          <p className="text-[11px] font-bold text-slate-600 uppercase tracking-widest mb-2">Back Side</p>
                           <div
                             onClick={() => backInputRef.current?.click()}
                             className="aspect-[1.58] bg-slate-50 rounded-xl overflow-hidden border-2 border-dashed border-slate-200 relative cursor-pointer hover:border-primary-300 hover:bg-primary-50/30 transition-all group"
@@ -552,33 +552,33 @@ export default function MyProofs() {
                       )}
 
                       <div>
-                        <label className="text-xs font-bold text-slate-500 uppercase">Document Title</label>
+                        <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">Document Title</label>
                         <input
                           type="text"
                           value={newProofForm.title}
                           onChange={e => setNewProofForm({ ...newProofForm, title: e.target.value })}
-                          className="w-full p-3 rounded-xl border border-slate-200 bg-slate-50 mt-1 focus:outline-none focus:border-primary-500"
+                          className="w-full p-3 rounded-xl border border-slate-200 bg-white mt-1 focus:outline-none focus:border-primary-500 text-slate-900 font-medium placeholder:text-slate-400 shadow-sm"
                           placeholder="e.g. Aadhar Card"
                         />
                       </div>
 
                       <div>
-                        <label className="text-xs font-bold text-slate-500 uppercase">Document ID Number</label>
+                        <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">Document ID Number</label>
                         <input
                           type="text"
                           value={newProofForm.documentNumber}
                           onChange={e => setNewProofForm({ ...newProofForm, documentNumber: e.target.value })}
-                          className="w-full p-3 rounded-xl border border-slate-200 bg-slate-50 mt-1 focus:outline-none focus:border-primary-500 font-mono tracking-wider"
+                          className="w-full p-3 rounded-xl border border-slate-200 bg-white mt-1 focus:outline-none focus:border-primary-500 font-mono tracking-wider text-slate-900 font-bold placeholder:text-slate-400 shadow-sm"
                           placeholder="1234 5678"
                         />
                       </div>
 
                       <div>
-                        <label className="text-xs font-bold text-slate-500 uppercase">Category</label>
+                        <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">Category</label>
                         <select
                           value={newProofForm.category}
                           onChange={e => setNewProofForm({ ...newProofForm, category: e.target.value })}
-                          className="w-full p-3 rounded-xl border border-slate-200 bg-slate-50 mt-1 focus:outline-none focus:border-primary-500"
+                          className="w-full p-3 rounded-xl border border-slate-200 bg-white mt-1 focus:outline-none focus:border-primary-500 text-slate-900 font-semibold shadow-sm"
                         >
                           <option value="identity">Identity</option>
                           <option value="financial">Financial (Bills, Pan)</option>
