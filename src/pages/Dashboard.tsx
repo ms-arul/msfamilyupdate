@@ -1,0 +1,986 @@
+import React, { useMemo, useCallback, useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router-dom';
+import { useFinance } from '../context/FinanceContext';
+import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
+import { supabase } from '../lib/supabase';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  Wallet,
+  TrendingUp,
+  TrendingDown,
+  AlertTriangle,
+  Sparkles,
+  Loader2,
+  Inbox,
+  ArrowUpRight,
+  ArrowDownRight,
+  ChevronRight,
+  Maximize,
+  X,
+  MessageSquareText,
+  Smartphone,
+  Sunrise,
+  Sun,
+  Sunset,
+  Moon,
+  Activity,
+} from 'lucide-react';
+import { getLiveRates, calculateAssetMetrics } from '../utils/rateService';
+import AnimatedNumber from '../components/ui/AnimatedNumber';
+import { staggerContainer, staggerItem } from '../utils/animations';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Cell,
+  AreaChart,
+  Area,
+  CartesianGrid,
+} from 'recharts';
+import { SafeChartContainer } from '../components/ui/SafeChartContainer';
+
+// Dashboard-local glass styles are now in index.css for better performance
+
+// ============================================================================
+// Animation Variants
+// ============================================================================
+const container = staggerContainer(0.065, 0.04);
+const item = staggerItem;
+
+// ============================================================================
+// Custom Chart Tooltip
+// ============================================================================
+interface CustomTooltipProps {
+  active?: boolean;
+  payload?: any[];
+  label?: string;
+}
+
+const CustomTooltip: React.FC<CustomTooltipProps> = ({ active, payload, label }) => {
+  if (active && payload?.length) {
+    return (
+      <div className="g-tooltip p-3 text-sm">
+        <p className="text-slate-400 text-[10px] font-semibold uppercase tracking-wider mb-1.5">{label}</p>
+        {payload.map((p, i) => (
+          <p key={i} style={{ color: p.color }} className="font-black text-xs font-sans">
+            ₹{Number(p.value).toLocaleString()}
+          </p>
+        ))}
+      </div>
+    );
+  }
+  return null;
+};
+
+// ============================================================================
+// Stat Card
+// ============================================================================
+interface StatCardProps {
+  title: string;
+  amount: number;
+  icon: React.ComponentType<any>;
+  glowColor: string;
+  iconBg: string;
+  iconColor: string;
+  prefix?: string;
+  suffix?: string;
+  delta?: number;
+}
+
+const StatCard: React.FC<StatCardProps> = React.memo(({
+  title, amount, icon: Icon, glowColor, iconBg, iconColor,
+  prefix = '₹', suffix = '', delta,
+}) => (
+  <motion.div
+    variants={item}
+    whileTap={{ scale: 0.96 }}
+    className="g-stat overflow-hidden cursor-default"
+  >
+    {/* Ambient color glow */}
+    <div className={`absolute -right-5 -top-5 w-20 h-20 rounded-full blur-2xl opacity-20 ${glowColor}`} />
+
+    <div className="relative z-10 p-3.5 sm:p-4 flex flex-col gap-3">
+      {/* Icon row */}
+      <div className="flex items-center justify-between">
+        <div className={`g-icon-bubble w-9 h-9 rounded-[11px] flex items-center justify-center ${iconBg}`}>
+          <Icon size={16} className={iconColor} />
+        </div>
+        {delta !== undefined && (
+          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${delta >= 0
+              ? 'bg-emerald-500/12 text-emerald-500 border border-emerald-500/20'
+              : 'bg-rose-500/12 text-rose-400 border border-rose-500/20'
+            }`}>
+            {delta >= 0 ? '+' : ''}{delta.toFixed(1)}%
+          </span>
+        )}
+      </div>
+
+      {/* Value */}
+      <div>
+        <h3 className="text-lg sm:text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white truncate leading-none">
+          <AnimatedNumber value={amount} prefix={prefix} suffix={suffix} />
+        </h3>
+        <p className="text-slate-400 dark:text-slate-500 text-[9px] font-semibold tracking-wider uppercase mt-1 truncate">
+          {title}
+        </p>
+      </div>
+    </div>
+
+    {/* Shimmer sweep */}
+    <div className="absolute inset-0 -translate-x-full hover:translate-x-full transition-transform duration-[1200ms] bg-gradient-to-r from-transparent via-white/[0.06] to-transparent pointer-events-none" />
+  </motion.div>
+));
+
+StatCard.displayName = 'StatCard';
+
+// ============================================================================
+// Balance Hero Card
+// ============================================================================
+interface BalanceHeroCardProps {
+  balance: number;
+  income: number;
+  expense: number;
+  t: (key: string) => string;
+}
+
+const BalanceHeroCard: React.FC<BalanceHeroCardProps> = React.memo(({ balance, income, expense, t }) => (
+  <motion.div variants={item} className="g-panel overflow-hidden">
+    {/* Gradient wash */}
+    <div className="absolute inset-0 bg-gradient-to-br from-primary-500/6 via-transparent to-secondary-500/6 pointer-events-none" />
+    {/* Glow orb */}
+    <div className="absolute -right-12 -bottom-12 w-48 h-48 rounded-full bg-primary-500/8 blur-3xl pointer-events-none" />
+
+    <div className="relative z-10 p-4 sm:p-6">
+      {/* Label row */}
+      <div className="flex items-center justify-between mb-1">
+        <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold tracking-widest uppercase">
+          {t('Total Balance')}
+        </p>
+        <div className="g-icon-bubble w-8 h-8 rounded-[10px] bg-primary-500/12 flex items-center justify-center">
+          <Wallet size={14} className="text-primary-500" />
+        </div>
+      </div>
+
+      {/* Balance */}
+      <h2 className="text-3xl sm:text-4xl font-black tracking-tight text-slate-900 dark:text-white mt-1 mb-5 leading-none">
+        <AnimatedNumber value={balance} prefix="₹" />
+      </h2>
+
+      {/* Divider */}
+      <div className="g-divider mb-4" />
+
+      {/* Income / Expense pills */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex-1 min-w-[130px] flex items-center gap-2 rounded-[14px] px-3 py-2.5 g-icon-bubble bg-emerald-500/8">
+          <div className="w-6 h-6 rounded-[8px] bg-emerald-500/15 flex items-center justify-center flex-shrink-0">
+            <ArrowUpRight size={12} className="text-emerald-500" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[8.5px] text-slate-400 uppercase tracking-wider font-bold">{t('Income')}</p>
+            <p className="text-xs sm:text-sm font-extrabold text-emerald-500 truncate leading-tight">
+              <AnimatedNumber value={income} prefix="₹" />
+            </p>
+          </div>
+        </div>
+        <div className="flex-1 min-w-[130px] flex items-center gap-2 rounded-[14px] px-3 py-2.5 g-icon-bubble bg-rose-500/8">
+          <div className="w-6 h-6 rounded-[8px] bg-rose-500/15 flex items-center justify-center flex-shrink-0">
+            <ArrowDownRight size={12} className="text-rose-400" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[8.5px] text-slate-400 uppercase tracking-wider font-bold">{t('Expense')}</p>
+            <p className="text-xs sm:text-sm font-extrabold text-rose-400 truncate leading-tight">
+              <AnimatedNumber value={expense} prefix="₹" />
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </motion.div>
+));
+
+BalanceHeroCard.displayName = 'BalanceHeroCard';
+
+// ============================================================================
+// Savings Goal Card
+// ============================================================================
+interface SavingsGoalCardProps {
+  goal: { name: string; target: number };
+  progress: number;
+  balance: number;
+  t: (key: string) => string;
+}
+
+const SavingsGoalCard: React.FC<SavingsGoalCardProps> = React.memo(({ goal, progress, balance, t }) => (
+  <motion.div variants={item} className="g-panel p-4 sm:p-5 overflow-hidden">
+    <div className="absolute -left-8 -bottom-8 w-36 h-36 rounded-full bg-secondary-500/8 blur-3xl pointer-events-none" />
+    <div className="relative z-10">
+      <div className="flex items-start justify-between mb-4">
+        <div>
+          <p className="text-[10px] text-slate-400 font-bold tracking-widest uppercase">{t('Savings Goal')}</p>
+          <h4 className="text-sm font-bold text-slate-800 dark:text-white mt-0.5 truncate max-w-[160px]">
+            {goal.name}
+          </h4>
+        </div>
+        <div className="text-right">
+          <p className="text-xl font-black text-secondary-500 leading-none">
+            <AnimatedNumber value={progress} suffix="%" />
+          </p>
+          <p className="text-[9px] text-slate-400 mt-0.5">of ₹{goal.target.toLocaleString()}</p>
+        </div>
+      </div>
+
+      {/* Progress track */}
+      <div className="g-progress-track h-2">
+        <motion.div
+          initial={{ width: 0 }}
+          animate={{ width: `${progress}%` }}
+          transition={{ duration: 1.1, ease: [0.16, 1, 0.3, 1], delay: 0.3 }}
+          className="h-full rounded-full bg-gradient-to-r from-secondary-400 to-primary-500 relative"
+        >
+          {/* Progress shine */}
+          <span className="absolute inset-y-0 right-0 w-4 bg-gradient-to-r from-transparent to-white/30 rounded-full" />
+        </motion.div>
+      </div>
+
+      <div className="flex justify-between mt-2">
+        <p className="text-[9.5px] text-slate-400 font-medium">
+          <AnimatedNumber value={balance} prefix="₹" suffix=" saved" />
+        </p>
+        <p className="text-[9.5px] text-slate-400 font-medium">
+          <AnimatedNumber value={Math.max(0, goal.target - balance)} prefix="₹" suffix=" to go" />
+        </p>
+      </div>
+    </div>
+  </motion.div>
+));
+
+SavingsGoalCard.displayName = 'SavingsGoalCard';
+
+// ============================================================================
+// Savings Glance Card
+// ============================================================================
+interface SavingsGlanceProps {
+  t: (key: string) => string;
+  navigate: (path: string) => void;
+}
+
+const SavingsGlance: React.FC<SavingsGlanceProps> = React.memo(({ t, navigate }) => {
+  const { user } = useAuth();
+  const [assets, setAssets] = useState<any[]>([]);
+  const [marketData, setMarketData] = useState<any>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+
+  useEffect(() => {
+    if (!user) return;
+    const loadData = async () => {
+      try {
+        const [ratesData, assetsRes] = await Promise.all([
+          getLiveRates(),
+          supabase.from('savings_assets').select('*').eq('user_id', user.id),
+        ]);
+        setMarketData(ratesData);
+        if (assetsRes.data) setAssets(assetsRes.data);
+      } catch (err) {
+        console.error('Savings glance error:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadData();
+  }, [user]);
+
+  const totalMetrics = useMemo(() => {
+    if (!marketData || assets.length === 0) return { totalValue: 0, totalProfit: 0, percentage: 0 };
+    let totalValue = 0, totalPurchase = 0;
+    assets.forEach(asset => {
+      const m = calculateAssetMetrics(asset, marketData);
+      totalValue += m.currentValue;
+      totalPurchase += asset.purchase_price;
+    });
+    const profit = totalValue - totalPurchase;
+    return { totalValue, totalProfit: profit, percentage: totalPurchase > 0 ? (profit / totalPurchase) * 100 : 0 };
+  }, [assets, marketData]);
+
+  if (loading) return (
+    <div className="g-panel h-24 flex items-center justify-center">
+      <Loader2 size={22} className="animate-spin text-primary-400/60" />
+    </div>
+  );
+
+  const isProfit = totalMetrics.totalProfit >= 0;
+
+  return (
+    <motion.div
+      variants={item}
+      whileTap={{ scale: 0.985 }}
+      onClick={() => navigate('/savings')}
+      className="g-panel overflow-hidden p-4 sm:p-5 cursor-pointer group"
+    >
+      <div className="absolute inset-0 bg-gradient-to-br from-amber-400/5 via-transparent to-primary-500/5 pointer-events-none" />
+      <div className="absolute -right-12 -top-12 w-48 h-48 rounded-full bg-amber-400/8 blur-3xl pointer-events-none" />
+
+      <div className="relative z-10 flex flex-wrap items-center justify-between sm:justify-start gap-4 sm:gap-6">
+        {/* Total Value */}
+        <div className="flex flex-col shrink-0">
+          <div className="flex items-center gap-1.5 mb-1">
+            <Activity size={13} className="text-amber-500 shrink-0" />
+            <p className="text-[8.5px] text-slate-400 font-bold tracking-widest uppercase">{t('Savings Glance')}</p>
+          </div>
+          <h2 className="text-xl sm:text-3xl font-black text-slate-900 dark:text-white leading-none">
+            <AnimatedNumber value={totalMetrics.totalValue} prefix="₹" />
+          </h2>
+          <p className="text-[9px] text-slate-400 font-semibold mt-0.5">{t('Total Asset Value')}</p>
+        </div>
+
+        {/* Divider */}
+        <div className="hidden xs:block w-px h-12 sm:h-14 bg-gradient-to-b from-transparent via-slate-200/60 dark:via-white/8 to-transparent shrink-0" />
+
+        {/* Market Rates */}
+        <div className="flex flex-col gap-2 shrink-0">
+          <div>
+            <p className="text-[8px] text-slate-400 font-bold uppercase leading-none mb-0.5">{t('Gold')}</p>
+            <p className="text-[11px] sm:text-sm font-black text-slate-800 dark:text-slate-200 whitespace-nowrap">
+              ₹{marketData?.gold24?.toLocaleString() || '---'}
+            </p>
+          </div>
+          <div>
+            <p className="text-[8px] text-slate-400 font-bold uppercase leading-none mb-0.5">{t('Silver')}</p>
+            <p className="text-[11px] sm:text-sm font-black text-slate-800 dark:text-slate-200 whitespace-nowrap">
+              ₹{marketData?.silver?.toLocaleString() || '---'}
+            </p>
+          </div>
+        </div>
+
+        {/* Divider */}
+        <div className="hidden sm:block w-px h-10 sm:h-12 bg-gradient-to-b from-transparent via-slate-200/60 dark:via-white/8 to-transparent shrink-0" />
+
+        {/* Growth */}
+        <div className="flex flex-col min-w-0">
+          <p className="text-[8px] text-slate-400 font-bold uppercase leading-none mb-1">{t('Growth')}</p>
+          <div className={`flex items-center gap-1 font-black text-xs sm:text-lg ${isProfit ? 'text-emerald-500' : 'text-rose-400'}`}>
+            {isProfit ? <TrendingUp size={14} className="sm:size-5" /> : <TrendingDown size={14} className="sm:size-5" />}
+            <span className="whitespace-nowrap">{Math.abs(totalMetrics.percentage).toFixed(1)}%</span>
+          </div>
+          <p className={`text-[9px] sm:text-xs font-bold mt-0.5 whitespace-nowrap ${isProfit ? 'text-emerald-400' : 'text-rose-400'}`}>
+            {isProfit ? '+' : '-'}<AnimatedNumber value={Math.abs(totalMetrics.totalProfit)} prefix="₹" />
+          </p>
+        </div>
+
+        {/* Arrow */}
+        <div className="ml-auto flex shrink-0">
+          <div className="g-icon-bubble w-9 h-9 rounded-[12px] bg-slate-100/70 dark:bg-white/5 flex items-center justify-center text-slate-400 group-hover:bg-primary-500 group-hover:text-white group-hover:shadow-lg group-hover:shadow-primary-500/30 transition-all duration-300">
+            <ChevronRight size={16} className="group-hover:translate-x-0.5 transition-transform" />
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+});
+
+SavingsGlance.displayName = 'SavingsGlance';
+
+// ============================================================================
+// Transaction Row
+// ============================================================================
+interface TransactionRowProps {
+  tx: any;
+  onDelete: (id: string) => void;
+  isDeleting: boolean;
+  t: (key: string) => string;
+}
+
+const TransactionRow: React.FC<TransactionRowProps> = React.memo(({ tx, onDelete, isDeleting, t }) => {
+  const isIncome = tx.type === 'income';
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, x: -60, transition: { duration: 0.18 } }}
+      className="g-row flex items-center justify-between px-3 py-2.5 sm:py-3 touch-manipulation"
+    >
+      {/* Left */}
+      <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+        {/* Dot */}
+        <div className={`w-2 h-2 rounded-full flex-shrink-0 ${isIncome
+            ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)]'
+            : 'bg-rose-400 shadow-[0_0_6px_rgba(244,63,94,0.5)]'
+          }`} />
+        {/* Icon bubble */}
+        <div className={`g-icon-bubble w-8 h-8 sm:w-9 sm:h-9 rounded-[10px] flex-shrink-0 flex items-center justify-center ${isIncome ? 'bg-emerald-500/10' : 'bg-rose-500/10'
+          }`}>
+          {isIncome
+            ? <ArrowUpRight size={13} className="text-emerald-500" />
+            : <ArrowDownRight size={13} className="text-rose-400" />}
+        </div>
+        <div className="min-w-0">
+          <p className="font-semibold text-xs sm:text-sm text-slate-800 dark:text-slate-200 truncate">{t(tx.category)}</p>
+          <p className="text-[9px] text-slate-400 mt-0.5 truncate">{t(tx.memberName)} · {tx.date}</p>
+        </div>
+      </div>
+
+      {/* Amount */}
+      <span className={`font-extrabold text-xs sm:text-sm font-sans ml-2 flex-shrink-0 ${isIncome ? 'text-emerald-500' : 'text-rose-400'
+        }`}>
+        {isIncome ? '+' : '-'}₹{Number(tx.amount).toLocaleString()}
+      </span>
+    </motion.div>
+  );
+});
+
+TransactionRow.displayName = 'TransactionRow';
+
+// ============================================================================
+// Empty State
+// ============================================================================
+const EmptyState: React.FC<{ message: string }> = ({ message }) => (
+  <div className="py-12 flex flex-col items-center justify-center text-slate-400 select-none">
+    <div className="g-icon-bubble w-14 h-14 rounded-[18px] bg-slate-100/60 dark:bg-white/4 flex items-center justify-center mb-3">
+      <Inbox size={22} className="opacity-40" />
+    </div>
+    <p className="text-sm font-medium text-slate-400">{message}</p>
+  </div>
+);
+
+// ============================================================================
+// Section Title
+// ============================================================================
+interface SectionTitleProps {
+  color?: string;
+  children: React.ReactNode;
+  right?: React.ReactNode;
+}
+
+const SectionTitle: React.FC<SectionTitleProps> = ({
+  color = 'from-primary-400 to-secondary-400',
+  children,
+  right,
+}) => (
+  <div className="flex items-center justify-between mb-4 sm:mb-5">
+    <h3 className="text-sm sm:text-[15px] font-bold flex items-center gap-2 text-slate-800 dark:text-slate-100">
+      <div className={`w-1 h-4 sm:h-[18px] rounded-full bg-gradient-to-b ${color} shadow-sm`} />
+      {children}
+    </h3>
+    {right}
+  </div>
+);
+
+// ============================================================================
+// Main Dashboard
+// ============================================================================
+export default function Dashboard() {
+  const {
+    personalIncome: totalIncome = 0,
+    personalExpense: totalExpense = 0,
+    budgetLimit = 0,
+    updateBudgetLimit,
+    personalTransactions: transactions = [],
+    allPersonalTransactions = [],
+    allTimePersonalBalance = 0,
+    deleteTransaction,
+    savingsGoal = { name: 'Family Vacation', target: 100000 },
+    smsTransactionCount = 0,
+    todaySmsCount = 0,
+  } = useFinance();
+  const { user } = useAuth();
+  const { t } = useLanguage();
+  const navigate = useNavigate();
+
+  // Greeting
+  const greetingText = useMemo(() => {
+    if (!user?.name) return '';
+    const hour = new Date().getHours();
+    let timeGreeting = '';
+    if (hour >= 5 && hour < 12) {
+      const opts = [t('Good morning'), t('Beautiful morning'), t('Rise and shine'), t('Happy morning')];
+      timeGreeting = opts[Math.floor(Math.random() * opts.length)];
+    } else if (hour >= 12 && hour < 17) {
+      const opts = [t('Good afternoon'), t('Have a pleasant afternoon'), t('Productive afternoon'), t('Pleasant day')];
+      timeGreeting = opts[Math.floor(Math.random() * opts.length)];
+    } else if (hour >= 17 && hour < 22) {
+      const opts = [t('Good evening'), t('Warm evening greetings'), t('Cozy evening'), t('Relaxing evening')];
+      timeGreeting = opts[Math.floor(Math.random() * opts.length)];
+    } else {
+      const opts = [t('Good night'), t('Rest well tonight'), t('Peaceful night'), t('Restful night')];
+      timeGreeting = opts[Math.floor(Math.random() * opts.length)];
+    }
+    const styles = [
+      `${timeGreeting}, ${user.name}!`,
+      `Hey ${user.name}! ${timeGreeting}.`,
+      `${timeGreeting}, ${user.name}. ${t("Let's keep tracking!")}`,
+      `Welcome back, ${user.name}! ${timeGreeting}.`,
+    ];
+    return styles[(new Date().getMinutes() + new Date().getDate()) % styles.length];
+  }, [user?.name, t]);
+
+  const greetingIcon = useMemo(() => {
+    const hour = new Date().getHours();
+    const props = { size: 16, strokeWidth: 2.4 };
+    if (hour >= 5 && hour < 12) return <Sunrise  {...props} className="text-amber-500" />;
+    if (hour >= 12 && hour < 17) return <Sun      {...props} className="text-yellow-500" />;
+    if (hour >= 17 && hour < 22) return <Sunset   {...props} className="text-orange-500" />;
+    return <Moon {...props} className="text-indigo-400" />;
+  }, []);
+
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [showBudgetModal, setShowBudgetModal] = useState<boolean>(false);
+  const [editBudgetVal, setEditBudgetVal] = useState<string>('');
+  const [graphFilter, setGraphFilter] = useState<string>('Month');
+  const [isFullscreenGraph, setIsFullscreenGraph] = useState<boolean>(false);
+
+  const isOverBudget = useMemo(() => totalExpense > budgetLimit && budgetLimit > 0, [totalExpense, budgetLimit]);
+  const savingsRate = useMemo(() => totalIncome > 0 ? (allTimePersonalBalance / totalIncome) * 100 : 0, [allTimePersonalBalance, totalIncome]);
+  const goalProgress = useMemo(() => Math.min((allTimePersonalBalance / savingsGoal.target) * 100, 100), [allTimePersonalBalance, savingsGoal.target]);
+
+  const chartData = useMemo(() => {
+    const map = transactions
+      .filter((tx: any) => tx.type === 'expense')
+      .reduce((acc: { [key: string]: number }, curr: any) => {
+        acc[curr.category] = (acc[curr.category] || 0) + Number(curr.amount);
+        return acc;
+      }, {});
+    return Object.entries(map)
+      .map(([name, amount]) => ({ name, amount }))
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 6);
+  }, [transactions]);
+
+  const trendData = useMemo(() => {
+    let filtered = [...(allPersonalTransactions || [])];
+    const now = new Date();
+    if (graphFilter === 'Day') filtered = filtered.filter(tx => new Date(tx.date).toDateString() === now.toDateString());
+    else if (graphFilter === 'Week') { const d = new Date(); d.setDate(now.getDate() - 7); filtered = filtered.filter(tx => new Date(tx.date) >= d); }
+    else if (graphFilter === 'Month') { const d = new Date(); d.setMonth(now.getMonth() - 1); filtered = filtered.filter(tx => new Date(tx.date) >= d); }
+    else if (graphFilter === 'Year') { const d = new Date(); d.setFullYear(now.getFullYear() - 1); filtered = filtered.filter(tx => new Date(tx.date) >= d); }
+
+    const map = new Map<string, { income: number; expense: number }>();
+    filtered.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()).forEach(tx => {
+      const d = new Date(tx.date);
+      const key = graphFilter === 'Year'
+        ? d.toLocaleString('default', { month: 'short', year: '2-digit' })
+        : d.toLocaleString('default', { month: 'short', day: 'numeric' });
+      const existing = map.get(key) || { income: 0, expense: 0 };
+      if (tx.type === 'income') existing.income += Number(tx.amount);
+      else existing.expense += Number(tx.amount);
+      map.set(key, existing);
+    });
+    return Array.from(map.entries()).map(([date, values]) => ({ date, ...values }));
+  }, [allPersonalTransactions, graphFilter]);
+
+  const handleDelete = useCallback(async (id: string) => {
+    if (window.confirm(t('Delete this transaction?'))) {
+      setDeletingId(id);
+      try { await deleteTransaction(id); }
+      catch (err) { console.error('Delete failed:', err); alert('Could not delete. Please try again.'); }
+      finally { setDeletingId(null); }
+    }
+  }, [deleteTransaction, t]);
+
+  const handleEditBudgetClick = useCallback(() => {
+    setEditBudgetVal(String(budgetLimit));
+    setShowBudgetModal(true);
+  }, [budgetLimit]);
+
+  const handleSaveBudget = useCallback(() => {
+    const parsed = Number(editBudgetVal);
+    if (!isNaN(parsed) && parsed >= 0) { updateBudgetLimit(parsed); setShowBudgetModal(false); }
+  }, [editBudgetVal, updateBudgetLimit]);
+
+  const chartColors = ['#8b5cf6', '#22d3ee', '#f43f5e', '#10b981', '#f59e0b', '#ec4899'];
+  const displayedTx = transactions.slice(0, 10);
+
+  return (
+    <motion.div variants={container} initial="hidden" animate="show" className="space-y-3 sm:space-y-4 pb-4">
+
+      {/* ── Greeting Pill ── */}
+      {greetingText && (
+        <motion.div variants={item}>
+          <div className="g-pill inline-flex items-center gap-2 px-3 py-1.5 select-none">
+            <span className="flex items-center justify-center shrink-0">{greetingIcon}</span>
+            <span className="text-[10px] sm:text-[11px] font-extrabold tracking-wider uppercase text-slate-500 dark:text-slate-400">
+              {greetingText}
+            </span>
+          </div>
+        </motion.div>
+      )}
+
+      {/* ── Balance Hero ── */}
+      <BalanceHeroCard balance={allTimePersonalBalance} income={totalIncome} expense={totalExpense} t={t} />
+
+      {/* ── Stat Grid ── */}
+      <motion.div variants={item} className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-4 gap-3">
+        <StatCard
+          title={t('Savings Rate')}
+          amount={savingsRate}
+          icon={Sparkles}
+          glowColor="bg-violet-500"
+          iconBg="bg-violet-500/12"
+          iconColor="text-violet-500"
+          prefix=""
+          suffix="%"
+        />
+        <div onClick={handleEditBudgetClick} className="cursor-pointer">
+          <StatCard
+            title={t('Budget Limit')}
+            amount={budgetLimit}
+            icon={Wallet}
+            glowColor="bg-primary-500"
+            iconBg="bg-primary-500/12"
+            iconColor="text-primary-500"
+          />
+        </div>
+        <StatCard
+          title={t('Total Income')}
+          amount={totalIncome}
+          icon={TrendingUp}
+          glowColor="bg-emerald-500"
+          iconBg="bg-emerald-500/12"
+          iconColor="text-emerald-500"
+        />
+        <StatCard
+          title={t('Total Expenses')}
+          amount={totalExpense}
+          icon={TrendingDown}
+          glowColor="bg-rose-500"
+          iconBg="bg-rose-500/12"
+          iconColor="text-rose-400"
+        />
+      </motion.div>
+
+      {/* ── Budget Alert ── */}
+      <AnimatePresence>
+        {isOverBudget && (
+          <motion.div
+            variants={item} initial="hidden" animate="show" exit="hidden"
+            onClick={handleEditBudgetClick}
+            className="g-panel cursor-pointer overflow-hidden p-3.5 sm:p-4"
+          >
+            <div className="absolute inset-0 bg-gradient-to-r from-rose-500/6 to-orange-500/4 pointer-events-none" />
+            <div className="relative z-10 flex items-start sm:items-center gap-3">
+              <div className="g-icon-bubble w-9 h-9 rounded-[11px] bg-rose-500/12 flex items-center justify-center flex-shrink-0 mt-0.5 sm:mt-0">
+                <AlertTriangle className="text-rose-400" size={17} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h4 className="text-rose-400 font-bold text-sm">{t('Budget Exceeded')}</h4>
+                <p className="text-[10px] sm:text-xs text-slate-400 mt-0.5 leading-relaxed">
+                  Expenses (₹{totalExpense.toLocaleString()}) exceeded your ₹{budgetLimit.toLocaleString()} limit.
+                </p>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Savings Glance ── */}
+      <SavingsGlance t={t} navigate={navigate} />
+
+      {/* ── Savings Goal ── */}
+      <SavingsGoalCard goal={savingsGoal} progress={goalProgress} balance={allTimePersonalBalance} t={t} />
+
+      {/* ── Smart SMS Widget ── */}
+      {smsTransactionCount > 0 && (
+        <motion.div
+          variants={item}
+          whileTap={{ scale: 0.985 }}
+          onClick={() => navigate('/transactions')}
+          className="g-panel overflow-hidden p-4 sm:p-5 cursor-pointer group"
+        >
+          <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 via-transparent to-blue-500/5 pointer-events-none" />
+          <div className="absolute -right-12 -top-12 w-48 h-48 rounded-full bg-cyan-400/8 blur-3xl pointer-events-none" />
+          <div className="relative z-10 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="g-icon-bubble w-10 h-10 rounded-[13px] bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+                <span className="absolute top-0 left-1.5 right-1.5 h-px bg-gradient-to-r from-transparent via-white/50 to-transparent" />
+                <MessageSquareText size={17} className="text-white" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{t('Smart SMS Reader')}</p>
+                <p className="text-[10px] text-slate-400">
+                  {todaySmsCount > 0
+                    ? `${todaySmsCount} detected today · ${smsTransactionCount} total`
+                    : `${smsTransactionCount} transactions auto-recorded`}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 bg-cyan-50 dark:bg-cyan-900/20 border border-cyan-200/40 dark:border-cyan-500/20 px-2.5 py-1.5 rounded-[10px]">
+                <Smartphone size={11} className="text-cyan-500" />
+                <span className="text-xs font-black text-cyan-600 dark:text-cyan-400">{smsTransactionCount}</span>
+              </div>
+              <ChevronRight size={15} className="text-slate-300 group-hover:text-cyan-500 group-hover:translate-x-0.5 transition-all" />
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      {/* ── Charts ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-3 sm:gap-4">
+
+        {/* Trend Chart */}
+        <motion.div variants={item} className="g-panel p-4 sm:p-5 lg:col-span-3">
+          <SectionTitle
+            color="from-primary-400 to-secondary-400"
+            right={
+              <button
+                onClick={() => setIsFullscreenGraph(true)}
+                className="g-icon-bubble w-7 h-7 rounded-[9px] bg-slate-100/70 dark:bg-white/5 flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
+              >
+                <Maximize size={13} />
+              </button>
+            }
+          >
+            {t('Income vs Expense')}
+          </SectionTitle>
+
+          {/* Filter tabs */}
+          <div className="g-filter-track flex items-center gap-0.5 mb-4 w-max">
+            {['Day', 'Week', 'Month', 'Year'].map(f => (
+              <button
+                key={f}
+                onClick={() => setGraphFilter(f)}
+                className={`relative px-3 py-1.5 text-[10px] font-bold rounded-[10px] transition-all duration-200 ${graphFilter === f
+                    ? 'g-filter-active text-primary-500 dark:text-primary-400'
+                    : 'text-slate-400 dark:text-slate-500 hover:text-slate-600'
+                  }`}
+              >
+                {t(f)}
+              </button>
+            ))}
+          </div>
+
+          <div className="w-full min-w-0" style={{ height: 'clamp(180px, 25vw, 280px)' }}>
+            {trendData.length === 0 ? <EmptyState message={t('No transaction data yet')} /> : (
+              <SafeChartContainer width="100%" height="100%" minWidth={0} minHeight={180} data={trendData}>
+                <AreaChart data={trendData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="incomeGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.25} />
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="expenseGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.25} />
+                      <stop offset="95%" stopColor="#f43f5e" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.12)" />
+                  <XAxis dataKey="date" stroke="#94a3b8" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
+                  <YAxis stroke="#94a3b8" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `₹${v}`} />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Area type="monotone" dataKey="income" stroke="#10b981" strokeWidth={2} fill="url(#incomeGrad)" dot={{ r: 2.5, strokeWidth: 2 }} />
+                  <Area type="monotone" dataKey="expense" stroke="#f43f5e" strokeWidth={2} fill="url(#expenseGrad)" dot={{ r: 2.5, strokeWidth: 2 }} />
+                </AreaChart>
+              </SafeChartContainer>
+            )}
+          </div>
+
+          {trendData.length > 0 && (
+            <div className="flex items-center gap-4 mt-3">
+              <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
+                <div className="w-3 h-1 rounded-full bg-emerald-500" />{t('Income')}
+              </div>
+              <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
+                <div className="w-3 h-1 rounded-full bg-rose-400" />{t('Expense')}
+              </div>
+            </div>
+          )}
+        </motion.div>
+
+        {/* Category Bar Chart */}
+        <motion.div variants={item} className="g-panel p-4 sm:p-5 lg:col-span-2">
+          <SectionTitle color="from-rose-400 to-amber-400">{t('Top Categories')}</SectionTitle>
+          <div className="w-full min-w-0" style={{ height: 'clamp(180px, 25vw, 280px)' }}>
+            {chartData.length === 0 ? <EmptyState message={t('No expense data')} /> : (
+              <SafeChartContainer width="100%" height="100%" minWidth={0} minHeight={180} data={chartData}>
+                <BarChart data={chartData} layout="vertical" margin={{ top: 5, right: 20, left: 10, bottom: 0 }}>
+                  <XAxis type="number" stroke="#94a3b8" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `₹${v}`} />
+                  <YAxis dataKey="name" type="category" stroke="#94a3b8" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={70} />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Bar dataKey="amount" radius={[0, 7, 7, 0]} barSize={11}>
+                    {chartData.map((_, i) => <Cell key={`cell-${i}`} fill={chartColors[i % chartColors.length]} />)}
+                  </Bar>
+                </BarChart>
+              </SafeChartContainer>
+            )}
+          </div>
+        </motion.div>
+      </div>
+
+      {/* ── Recent Transactions ── */}
+      <motion.div variants={item} className="g-panel p-4 sm:p-5">
+        <SectionTitle
+          color="from-secondary-400 to-primary-400"
+          right={
+            <span className="text-[9px] text-slate-400 g-pill px-2.5 py-1 font-semibold">
+              {transactions.length} {t('records')}
+            </span>
+          }
+        >
+          {t('Recent Transactions')}
+        </SectionTitle>
+
+        <div className="space-y-1.5 sm:space-y-2">
+          <AnimatePresence initial={false}>
+            {transactions.length === 0 ? (
+              <EmptyState message={t('No transactions yet. Add your first one!')} />
+            ) : (
+              displayedTx.map(tx => (
+                <TransactionRow key={tx.id} tx={tx} onDelete={handleDelete} isDeleting={deletingId === tx.id} t={t} />
+              ))
+            )}
+          </AnimatePresence>
+        </div>
+
+        {transactions.length > 10 && (
+          <motion.button
+            whileTap={{ scale: 0.97 }}
+            onClick={() => navigate('/transactions')}
+            className="g-ghost-btn w-full mt-4 py-2.5 text-xs font-semibold text-primary-500 flex items-center justify-center gap-1.5 transition-all"
+          >
+            {`${t('View All')} ${transactions.length} ${t('Transactions')}`}
+            <ChevronRight size={13} />
+          </motion.button>
+        )}
+      </motion.div>
+
+      {/* ── Budget Modal ── */}
+      <AnimatePresence>
+        {showBudgetModal && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/30 backdrop-blur-[10px] p-4"
+            onClick={() => setShowBudgetModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.90, opacity: 0, y: 20, filter: 'blur(5px)' }}
+              animate={{ scale: 1, opacity: 1, y: 0, filter: 'blur(0px)' }}
+              exit={{ scale: 0.92, opacity: 0, y: 10, filter: 'blur(4px)' }}
+              transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+              onClick={e => e.stopPropagation()}
+              className="relative w-full max-w-sm g-modal p-6"
+            >
+              {/* Specular edge */}
+              <span className="absolute top-0 left-6 right-6 h-px bg-gradient-to-r from-transparent via-white/90 dark:via-white/15 to-transparent" />
+
+              <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-1">{t('Edit Budget Limit')}</h3>
+              <p className="text-sm text-slate-400 mb-5">{t('Enter your new monthly budget limit.')}</p>
+
+              <div className="relative mb-5">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-lg pointer-events-none">₹</span>
+                <input
+                  type="number"
+                  value={editBudgetVal}
+                  onChange={e => setEditBudgetVal(e.target.value)}
+                  className="g-input w-full pl-10 pr-4 py-3.5 text-lg font-bold text-slate-900 dark:text-white"
+                  placeholder="3000"
+                  autoFocus
+                />
+              </div>
+
+              <div className="g-divider mb-5" />
+
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setShowBudgetModal(false)}
+                  className="flex-1 py-2.5 rounded-[14px] font-semibold text-sm text-slate-500 dark:text-slate-400 glass-btn"
+                >
+                  {t('Cancel')}
+                </button>
+                <button
+                  onClick={handleSaveBudget}
+                  className="flex-1 py-2.5 rounded-[14px] font-semibold text-sm text-white bg-gradient-to-r from-primary-500 to-secondary-500 shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 transition-shadow active:scale-95"
+                  style={{ transition: 'transform 0.14s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.2s' }}
+                >
+                  {t('Save')}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Fullscreen Chart ── */}
+      {createPortal(
+        <AnimatePresence>
+          {isFullscreenGraph && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[9999] bg-white/95 dark:bg-[#0c0c1e]/95 backdrop-blur-2xl flex flex-col landscape:flex-row"
+            >
+              {/* Controls panel */}
+              <div className="p-4 pt-[calc(env(safe-area-inset-top,24px)+20px)] sm:pt-[calc(env(safe-area-inset-top,24px)+24px)] flex flex-row landscape:flex-col justify-between items-center landscape:items-start border-b landscape:border-b-0 landscape:border-r border-slate-200/40 dark:border-white/[0.06] landscape:w-48 shrink-0">
+                <div className="landscape:mb-6">
+                  <h2 className="text-lg font-black text-slate-800 dark:text-white flex items-center gap-2">
+                    <Activity size={17} className="text-primary-500" />
+                    {t('Financial Trend')}
+                  </h2>
+                  <p className="text-[10px] text-slate-400 mt-1 hidden landscape:block">
+                    Interactive view of your income and expenses over time.
+                  </p>
+                </div>
+
+                <div className="flex landscape:flex-col items-center landscape:items-stretch gap-2 landscape:w-full">
+                  <div className="g-filter-track flex landscape:flex-col gap-0.5">
+                    {['Day', 'Week', 'Month', 'Year'].map(f => (
+                      <button
+                        key={f}
+                        onClick={() => setGraphFilter(f)}
+                        className={`px-3 py-1.5 landscape:py-2 text-xs font-bold rounded-[10px] transition-all ${graphFilter === f
+                            ? 'g-filter-active text-primary-500 dark:text-primary-400'
+                            : 'text-slate-400 hover:text-slate-600'
+                          }`}
+                      >
+                        {t(f)}
+                      </button>
+                    ))}
+                  </div>
+
+                  <button
+                    onClick={() => setIsFullscreenGraph(false)}
+                    className="g-close-btn p-2 ml-2 landscape:ml-0 landscape:mt-4 flex justify-center items-center gap-2 font-bold text-xs text-rose-400"
+                  >
+                    <X size={15} />
+                    <span className="hidden landscape:inline">{t('Close')}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Chart area */}
+              <div className="flex-1 p-3 sm:p-8 min-h-[300px]">
+                {trendData.length === 0 ? <EmptyState message={t('No transaction data for this period')} /> : (
+                  <SafeChartContainer width="100%" height="100%" minWidth={0} minHeight={280} data={trendData}>
+                    <AreaChart data={trendData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="incomeGradFS" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.28} />
+                          <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                        </linearGradient>
+                        <linearGradient id="expenseGradFS" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.28} />
+                          <stop offset="95%" stopColor="#f43f5e" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.12)" />
+                      <XAxis dataKey="date" stroke="#94a3b8" tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
+                      <YAxis stroke="#94a3b8" tick={{ fontSize: 12 }} axisLine={false} tickLine={false} tickFormatter={v => `₹${v}`} />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Area type="monotone" dataKey="income" stroke="#10b981" strokeWidth={3} fill="url(#incomeGradFS)" dot={{ r: 4, strokeWidth: 2 }} activeDot={{ r: 6, strokeWidth: 0 }} />
+                      <Area type="monotone" dataKey="expense" stroke="#f43f5e" strokeWidth={3} fill="url(#expenseGradFS)" dot={{ r: 4, strokeWidth: 2 }} activeDot={{ r: 6, strokeWidth: 0 }} />
+                    </AreaChart>
+                  </SafeChartContainer>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
+    </motion.div>
+  );
+}

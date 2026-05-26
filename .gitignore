@@ -2,3 +2,10 @@ node_modules
 android
 dist
 .env
+.idea
+.vscode
+scratch/
+*.apk
+*.log
+home-31f14-*.json
+google-services.json

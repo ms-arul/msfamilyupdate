@@ -4,21 +4,91 @@
 <head>
   <meta charset="UTF-8" />
   <link rel="icon" type="image/png" href="/mslogo.png" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <meta name="description"
     content="MS Family - Premium Home Finance Management Dashboard for your entire family. Track income, expenses, and savings with a stunning futuristic interface." />
-  <meta name="theme-color" content="#0a0a1a" />
+  <meta name="theme-color" content="#ffffff" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="format-detection" content="telephone=no" />
   <title>MS Family</title>
+  <!-- Prevent dark-mode flash: apply theme class BEFORE React hydrates -->
+  <script>
+    (function(){
+      try {
+        var t = localStorage.getItem('msfamily_theme_preference') || 'light';
+        var isDark = t === 'dark' || (t === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.classList.add(isDark ? 'dark' : 'light');
+        // Also sync splash background
+        var splash = document.getElementById('splash');
+        if (splash) splash.style.background = isDark ? '#0a0a14' : '#ffffff';
+      } catch(e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
-    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+Tamil:wght@300;400;500;600;700;800;900&display=swap"
     rel="stylesheet" />
+  <style>
+    /* Inline critical splash styles to prevent black flash */
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #ffffff;
+      color: #0f172a;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      font-family: 'Inter', 'Noto Sans Tamil', system-ui, sans-serif;
+      overscroll-behavior: none;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    #root {
+      min-height: 100vh;
+      min-height: 100dvh;
+      background-color: #ffffff;
+    }
+    /* Pre-render splash so user never sees blank */
+    #splash {
+      position: fixed;
+      inset: 0;
+      z-index: 99999;
+      background: #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: opacity 0.3s ease;
+    }
+    #splash img {
+      width: 80px;
+      height: 80px;
+      border-radius: 22px;
+      animation: breathe 2s ease-in-out infinite;
+      pointer-events: none;
+    }
+    @keyframes breathe {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.04); }
+    }
+  </style>
 </head>
 
-<body class="bg-[#06060e] text-white antialiased">
+<body>
+  <!-- Native splash shown instantly before JS loads -->
+  <div id="splash">
+    <img src="/mslogo.png" alt="MS Family" />
+  </div>
   <div id="root"></div>
-  <script type="module" src="/src/main.jsx"></script>
+  <script>
+    // Prevent right-click / long-press context menu globally
+    document.addEventListener('contextmenu', event => event.preventDefault());
+  </script>
+  <script type="module" src="/src/main.tsx"></script>
 </body>
 
 </html>
