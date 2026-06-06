@@ -416,7 +416,7 @@ export default function LiveTracking() {
       if (notifError) console.warn('Notification insert failed:', notifError.message);
 
       // Send real FCM push notification with action: 'fetch_location' data payload
-      await sendPushToUser(memberId, notifTitle, notifBody, 'high', { action: 'fetch_location' });
+      await sendPushToUser(memberId, notifTitle, notifBody, undefined, { action: 'fetch_location' });
     } catch (err) {
       console.warn('Failed to send location request:', err);
     }

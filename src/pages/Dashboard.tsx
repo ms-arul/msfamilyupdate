@@ -21,10 +21,6 @@ import {
   X,
   MessageSquareText,
   Smartphone,
-  Sunrise,
-  Sun,
-  Sunset,
-  Moon,
   Activity,
 } from 'lucide-react';
 import { getLiveRates, calculateAssetMetrics } from '../utils/rateService';
@@ -101,7 +97,7 @@ const StatCard: React.FC<StatCardProps> = React.memo(({
     className="g-stat overflow-hidden cursor-default"
   >
     {/* Ambient color glow */}
-    <div className={`absolute -right-5 -top-5 w-20 h-20 rounded-full blur-2xl opacity-20 ${glowColor}`} />
+    <div className={`absolute -right-5 -top-5 w-20 h-20 rounded-full blur-2xl opacity-20 ${glowColor} dark:hidden`} />
 
     <div className="relative z-10 p-3.5 sm:p-4 flex flex-col gap-3">
       {/* Icon row */}
@@ -111,8 +107,8 @@ const StatCard: React.FC<StatCardProps> = React.memo(({
         </div>
         {delta !== undefined && (
           <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${delta >= 0
-              ? 'bg-emerald-500/12 text-emerald-500 border border-emerald-500/20'
-              : 'bg-rose-500/12 text-rose-400 border border-rose-500/20'
+            ? 'bg-emerald-500/12 text-emerald-500 border border-emerald-500/20'
+            : 'bg-rose-500/12 text-rose-400 border border-rose-500/20'
             }`}>
             {delta >= 0 ? '+' : ''}{delta.toFixed(1)}%
           </span>
@@ -144,21 +140,26 @@ interface BalanceHeroCardProps {
   balance: number;
   income: number;
   expense: number;
+  received: number;
   t: (key: string) => string;
+  balanceFilter: string;
+  onFilterChange: (filter: string) => void;
 }
 
-const BalanceHeroCard: React.FC<BalanceHeroCardProps> = React.memo(({ balance, income, expense, t }) => (
+const BALANCE_FILTERS = ['Today', 'Yesterday', 'This Month', 'Last Month'];
+
+const BalanceHeroCard: React.FC<BalanceHeroCardProps> = React.memo(({ balance, income, expense, received, t, balanceFilter, onFilterChange }) => (
   <motion.div variants={item} className="g-panel overflow-hidden">
     {/* Gradient wash */}
-    <div className="absolute inset-0 bg-gradient-to-br from-primary-500/6 via-transparent to-secondary-500/6 pointer-events-none" />
+    <div className="absolute inset-0 bg-gradient-to-br from-primary-500/6 via-transparent to-secondary-500/6 pointer-events-none dark:hidden" />
     {/* Glow orb */}
-    <div className="absolute -right-12 -bottom-12 w-48 h-48 rounded-full bg-primary-500/8 blur-3xl pointer-events-none" />
+    <div className="absolute -right-12 -bottom-12 w-48 h-48 rounded-full bg-primary-500/8 blur-3xl pointer-events-none dark:hidden" />
 
     <div className="relative z-10 p-4 sm:p-6">
       {/* Label row */}
       <div className="flex items-center justify-between mb-1">
         <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold tracking-widest uppercase">
-          {t('Total Balance')}
+          {t('Net Balance')}
         </p>
         <div className="g-icon-bubble w-8 h-8 rounded-[10px] bg-primary-500/12 flex items-center justify-center">
           <Wallet size={14} className="text-primary-500" />
@@ -166,38 +167,81 @@ const BalanceHeroCard: React.FC<BalanceHeroCardProps> = React.memo(({ balance, i
       </div>
 
       {/* Balance */}
-      <h2 className="text-3xl sm:text-4xl font-black tracking-tight text-slate-900 dark:text-white mt-1 mb-5 leading-none">
+      <h2 className="text-3xl sm:text-4xl font-black tracking-tight text-slate-900 dark:text-white mt-1 mb-3 leading-none">
         <AnimatedNumber value={balance} prefix="₹" />
       </h2>
+
+      {/* Filter Tabs with animated indicator */}
+      <div className="g-filter-track flex items-center gap-0.5 mb-4 w-max">
+        {BALANCE_FILTERS.map(f => (
+          <button
+            key={f}
+            onClick={() => onFilterChange(f)}
+            className={`relative px-3 py-1.5 text-[10px] font-bold rounded-[10px] transition-colors duration-200 ${balanceFilter === f
+              ? 'text-primary-500 dark:text-primary-400'
+              : 'text-slate-400 dark:text-slate-500 hover:text-slate-600'
+              }`}
+          >
+            {balanceFilter === f && (
+              <motion.span
+                layoutId="balance-filter-indicator"
+                className="absolute inset-0 rounded-[10px] bg-primary-500/10 dark:bg-primary-400/15 border border-primary-500/20 dark:border-primary-400/20"
+                transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+              />
+            )}
+            <span className="relative z-10">{t(f)}</span>
+          </button>
+        ))}
+      </div>
 
       {/* Divider */}
       <div className="g-divider mb-4" />
 
-      {/* Income / Expense pills */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex-1 min-w-[130px] flex items-center gap-2 rounded-[14px] px-3 py-2.5 g-icon-bubble bg-emerald-500/8">
-          <div className="w-6 h-6 rounded-[8px] bg-emerald-500/15 flex items-center justify-center flex-shrink-0">
-            <ArrowUpRight size={12} className="text-emerald-500" />
+      {/* Income / Expense / Received pills — animated crossfade on filter change */}
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={balanceFilter}
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -6 }}
+          transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+          className="flex items-center gap-2 sm:gap-3"
+        >
+          <div className="flex-1 min-w-0 flex items-center gap-1.5 sm:gap-2 rounded-[14px] px-2 sm:px-3 py-2 sm:py-2.5 g-icon-bubble bg-emerald-500/8">
+            <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-[6px] sm:rounded-[8px] bg-emerald-500/15 flex items-center justify-center flex-shrink-0">
+              <ArrowUpRight size={11} className="text-emerald-500 sm:size-[12px]" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[8px] sm:text-[8.5px] text-slate-400 uppercase tracking-wider font-bold">{t('Income')}</p>
+              <p className="text-[11px] sm:text-sm font-extrabold text-emerald-500 truncate leading-tight">
+                <AnimatedNumber value={income} prefix="₹" />
+              </p>
+            </div>
           </div>
-          <div className="min-w-0">
-            <p className="text-[8.5px] text-slate-400 uppercase tracking-wider font-bold">{t('Income')}</p>
-            <p className="text-xs sm:text-sm font-extrabold text-emerald-500 truncate leading-tight">
-              <AnimatedNumber value={income} prefix="₹" />
-            </p>
+          <div className="flex-1 min-w-0 flex items-center gap-1.5 sm:gap-2 rounded-[14px] px-2 sm:px-3 py-2 sm:py-2.5 g-icon-bubble bg-rose-500/8">
+            <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-[6px] sm:rounded-[8px] bg-rose-500/15 flex items-center justify-center flex-shrink-0">
+              <ArrowDownRight size={11} className="text-rose-400 sm:size-[12px]" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[8px] sm:text-[8.5px] text-slate-400 uppercase tracking-wider font-bold">{t('Expense')}</p>
+              <p className="text-[11px] sm:text-sm font-extrabold text-rose-400 truncate leading-tight">
+                <AnimatedNumber value={expense} prefix="₹" />
+              </p>
+            </div>
           </div>
-        </div>
-        <div className="flex-1 min-w-[130px] flex items-center gap-2 rounded-[14px] px-3 py-2.5 g-icon-bubble bg-rose-500/8">
-          <div className="w-6 h-6 rounded-[8px] bg-rose-500/15 flex items-center justify-center flex-shrink-0">
-            <ArrowDownRight size={12} className="text-rose-400" />
+          <div className="flex-1 min-w-0 flex items-center gap-1.5 sm:gap-2 rounded-[14px] px-2 sm:px-3 py-2 sm:py-2.5 g-icon-bubble bg-blue-500/8">
+            <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-[6px] sm:rounded-[8px] bg-blue-500/15 flex items-center justify-center flex-shrink-0">
+              <ArrowUpRight size={11} className="text-blue-500 sm:size-[12px]" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[8px] sm:text-[8.5px] text-slate-400 uppercase tracking-wider font-bold">{t('Received')}</p>
+              <p className="text-[11px] sm:text-sm font-extrabold text-blue-500 truncate leading-tight">
+                <AnimatedNumber value={received} prefix="₹" />
+              </p>
+            </div>
           </div>
-          <div className="min-w-0">
-            <p className="text-[8.5px] text-slate-400 uppercase tracking-wider font-bold">{t('Expense')}</p>
-            <p className="text-xs sm:text-sm font-extrabold text-rose-400 truncate leading-tight">
-              <AnimatedNumber value={expense} prefix="₹" />
-            </p>
-          </div>
-        </div>
-      </div>
+        </motion.div>
+      </AnimatePresence>
     </div>
   </motion.div>
 ));
@@ -216,7 +260,7 @@ interface SavingsGoalCardProps {
 
 const SavingsGoalCard: React.FC<SavingsGoalCardProps> = React.memo(({ goal, progress, balance, t }) => (
   <motion.div variants={item} className="g-panel p-4 sm:p-5 overflow-hidden">
-    <div className="absolute -left-8 -bottom-8 w-36 h-36 rounded-full bg-secondary-500/8 blur-3xl pointer-events-none" />
+    <div className="absolute -left-8 -bottom-8 w-36 h-36 rounded-full bg-secondary-500/8 blur-3xl pointer-events-none dark:hidden" />
     <div className="relative z-10">
       <div className="flex items-start justify-between mb-4">
         <div>
@@ -320,8 +364,8 @@ const SavingsGlance: React.FC<SavingsGlanceProps> = React.memo(({ t, navigate })
       onClick={() => navigate('/savings')}
       className="g-panel overflow-hidden p-4 sm:p-5 cursor-pointer group"
     >
-      <div className="absolute inset-0 bg-gradient-to-br from-amber-400/5 via-transparent to-primary-500/5 pointer-events-none" />
-      <div className="absolute -right-12 -top-12 w-48 h-48 rounded-full bg-amber-400/8 blur-3xl pointer-events-none" />
+      <div className="absolute inset-0 bg-gradient-to-br from-amber-400/5 via-transparent to-primary-500/5 pointer-events-none dark:hidden" />
+      <div className="absolute -right-12 -top-12 w-48 h-48 rounded-full bg-amber-400/8 blur-3xl pointer-events-none dark:hidden" />
 
       <div className="relative z-10 flex flex-wrap items-center justify-between sm:justify-start gap-4 sm:gap-6">
         {/* Total Value */}
@@ -397,18 +441,17 @@ const TransactionRow: React.FC<TransactionRowProps> = React.memo(({ tx, onDelete
   const isIncome = tx.type === 'income';
   return (
     <motion.div
-      layout
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, x: -60, transition: { duration: 0.18 } }}
-      className="g-row flex items-center justify-between px-3 py-2.5 sm:py-3 touch-manipulation"
+      className="g-row flex items-center justify-between px-3 py-2.5 sm:py-3 touch-manipulation row-contain"
     >
       {/* Left */}
       <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
         {/* Dot */}
         <div className={`w-2 h-2 rounded-full flex-shrink-0 ${isIncome
-            ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)]'
-            : 'bg-rose-400 shadow-[0_0_6px_rgba(244,63,94,0.5)]'
+          ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)]'
+          : 'bg-rose-400 shadow-[0_0_6px_rgba(244,63,94,0.5)]'
           }`} />
         {/* Icon bubble */}
         <div className={`g-icon-bubble w-8 h-8 sm:w-9 sm:h-9 rounded-[10px] flex-shrink-0 flex items-center justify-center ${isIncome ? 'bg-emerald-500/10' : 'bg-rose-500/10'
@@ -490,50 +533,70 @@ export default function Dashboard() {
   const { t } = useLanguage();
   const navigate = useNavigate();
 
-  // Greeting
-  const greetingText = useMemo(() => {
-    if (!user?.name) return '';
-    const hour = new Date().getHours();
-    let timeGreeting = '';
-    if (hour >= 5 && hour < 12) {
-      const opts = [t('Good morning'), t('Beautiful morning'), t('Rise and shine'), t('Happy morning')];
-      timeGreeting = opts[Math.floor(Math.random() * opts.length)];
-    } else if (hour >= 12 && hour < 17) {
-      const opts = [t('Good afternoon'), t('Have a pleasant afternoon'), t('Productive afternoon'), t('Pleasant day')];
-      timeGreeting = opts[Math.floor(Math.random() * opts.length)];
-    } else if (hour >= 17 && hour < 22) {
-      const opts = [t('Good evening'), t('Warm evening greetings'), t('Cozy evening'), t('Relaxing evening')];
-      timeGreeting = opts[Math.floor(Math.random() * opts.length)];
-    } else {
-      const opts = [t('Good night'), t('Rest well tonight'), t('Peaceful night'), t('Restful night')];
-      timeGreeting = opts[Math.floor(Math.random() * opts.length)];
-    }
-    const styles = [
-      `${timeGreeting}, ${user.name}!`,
-      `Hey ${user.name}! ${timeGreeting}.`,
-      `${timeGreeting}, ${user.name}. ${t("Let's keep tracking!")}`,
-      `Welcome back, ${user.name}! ${timeGreeting}.`,
-    ];
-    return styles[(new Date().getMinutes() + new Date().getDate()) % styles.length];
-  }, [user?.name, t]);
 
-  const greetingIcon = useMemo(() => {
-    const hour = new Date().getHours();
-    const props = { size: 16, strokeWidth: 2.4 };
-    if (hour >= 5 && hour < 12) return <Sunrise  {...props} className="text-amber-500" />;
-    if (hour >= 12 && hour < 17) return <Sun      {...props} className="text-yellow-500" />;
-    if (hour >= 17 && hour < 22) return <Sunset   {...props} className="text-orange-500" />;
-    return <Moon {...props} className="text-indigo-400" />;
-  }, []);
 
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [showBudgetModal, setShowBudgetModal] = useState<boolean>(false);
   const [editBudgetVal, setEditBudgetVal] = useState<string>('');
   const [graphFilter, setGraphFilter] = useState<string>('Month');
   const [isFullscreenGraph, setIsFullscreenGraph] = useState<boolean>(false);
+  const [balanceFilter, setBalanceFilter] = useState<string>('This Month');
 
-  const isOverBudget = useMemo(() => totalExpense > budgetLimit && budgetLimit > 0, [totalExpense, budgetLimit]);
-  const savingsRate = useMemo(() => totalIncome > 0 ? (allTimePersonalBalance / totalIncome) * 100 : 0, [allTimePersonalBalance, totalIncome]);
+  // ── Filtered Balance Stats based on balance filter ──
+  const filteredStats = useMemo(() => {
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+    const lastMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+    const lastMonthYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+
+    let filtered: typeof allPersonalTransactions;
+
+    if (balanceFilter === 'Today') {
+      filtered = allPersonalTransactions.filter(tx => tx.date === todayStr);
+    } else if (balanceFilter === 'Yesterday') {
+      const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      const yesterdayStr = yesterday.toISOString().split('T')[0];
+      filtered = allPersonalTransactions.filter(tx => tx.date === yesterdayStr);
+    } else if (balanceFilter === 'Last Month') {
+      filtered = allPersonalTransactions.filter(tx => {
+        const d = new Date(tx.date);
+        return d.getMonth() === lastMonth && d.getFullYear() === lastMonthYear;
+      });
+    } else {
+      // 'This Month' (default)
+      filtered = allPersonalTransactions.filter(tx => {
+        const d = new Date(tx.date);
+        return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+      });
+    }
+
+    const income = filtered
+      .filter(tx => tx.type === 'income' && tx.category !== 'Transfer')
+      .reduce((acc, curr) => acc + Number(curr.amount), 0);
+    const expense = filtered
+      .filter(tx => tx.type === 'expense' && tx.category !== 'Transfer')
+      .reduce((acc, curr) => acc + Number(curr.amount), 0);
+    const received = filtered
+      .filter(tx => tx.type === 'income' && tx.category === 'Transfer')
+      .reduce((acc, curr) => acc + Number(curr.amount), 0);
+    const balance = income - expense;
+
+    return { income, expense, balance, received };
+  }, [allPersonalTransactions, balanceFilter]);
+
+  const isOverBudget = useMemo(() => filteredStats.expense > budgetLimit && budgetLimit > 0, [filteredStats.expense, budgetLimit]);
+  const savingsRate = useMemo(() => {
+    const overallIncome = allPersonalTransactions
+      .filter(tx => tx.type === 'income' && tx.category !== 'Transfer')
+      .reduce((acc, curr) => acc + Number(curr.amount), 0);
+    const overallExpense = allPersonalTransactions
+      .filter(tx => tx.type === 'expense' && tx.category !== 'Transfer')
+      .reduce((acc, curr) => acc + Number(curr.amount), 0);
+    const overallBalance = overallIncome - overallExpense;
+    return overallIncome > 0 ? (overallBalance / overallIncome) * 100 : 0;
+  }, [allPersonalTransactions]);
   const goalProgress = useMemo(() => Math.min((allTimePersonalBalance / savingsGoal.target) * 100, 100), [allTimePersonalBalance, savingsGoal.target]);
 
   const chartData = useMemo(() => {
@@ -593,26 +656,161 @@ export default function Dashboard() {
   const chartColors = ['#8b5cf6', '#22d3ee', '#f43f5e', '#10b981', '#f59e0b', '#ec4899'];
   const displayedTx = transactions.slice(0, 10);
 
+  // Keep date/time updated in real-time to prevent cached/stale values (e.g. sunset icon showing at night)
+  const [currentDate, setCurrentDate] = useState(() => new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentDate(new Date());
+    }, 60000); // Ticks every minute
+    return () => clearInterval(timer);
+  }, []);
+
+  // Combined greeting text and matching icon (AI-Style, friendly, and auto-synced)
+  const greeting = useMemo(() => {
+    if (!user?.name) return null;
+    const hour = currentDate.getHours();
+
+    // 1. Time-based compact greeting prefix and matching icon
+    let timeGreeting = '';
+    let iconSrc = '';
+
+    if (hour >= 5 && hour < 9) {
+      timeGreeting = t('Good morning');
+      iconSrc = '/greeting_icons/sunrise.png';
+    } else if (hour >= 9 && hour < 12) {
+      timeGreeting = t('Good morning');
+      iconSrc = '/greeting_icons/sun.png';
+    } else if (hour >= 12 && hour < 17) {
+      timeGreeting = t('Good afternoon');
+      iconSrc = '/greeting_icons/afternoon.png';
+    } else if (hour >= 17 && hour < 19) {
+      timeGreeting = t('Good evening');
+      iconSrc = '/greeting_icons/sunset.png';
+    } else {
+      timeGreeting = t('Good night');
+      const moonIcons = [
+        '/greeting_icons/fullmoon.png',
+        '/greeting_icons/halfmoon.png',
+        '/greeting_icons/moonrightquater.png',
+        '/greeting_icons/fullblackmoon.png'
+      ];
+      iconSrc = moonIcons[currentDate.getDate() % moonIcons.length];
+    }
+
+    // Use only first name/part to keep it extremely short and clean
+    const name = user.name.split(' ')[0];
+    const insights: string[] = [];
+
+    // 2. Compile active insights based on user data
+    const expense = filteredStats.expense;
+    const limit = budgetLimit;
+    const isOver = isOverBudget;
+
+    if (isOver && limit > 0) {
+      insights.push(`${t('We are over budget by')} ₹${(expense - limit).toLocaleString()}.`);
+    } else if (limit > 0 && expense >= limit * 0.8) {
+      insights.push(`${t('Budget alert')}: ${((expense / limit) * 100).toFixed(0)}% ${t('used already')}.`);
+      insights.push(`₹${(limit - expense).toLocaleString()} ${t('left to spend carefully')}.`);
+    } else if (limit > 0 && expense > 0) {
+      insights.push(`₹${(limit - expense).toLocaleString()} ${t('left in budget. Keep it up!')}`);
+    }
+
+    if (goalProgress > 0 && goalProgress < 100) {
+      insights.push(`${goalProgress.toFixed(0)}% ${t('closer to your savings goal!')}`);
+    }
+
+    if (savingsRate > 20) {
+      insights.push(`${t('Amazing savings rate of')} ${savingsRate.toFixed(0)}%!`);
+    } else if (savingsRate > 0) {
+      insights.push(`${t('You saved')} ${savingsRate.toFixed(0)}% ${t('this month!')}`);
+    }
+
+    if (todaySmsCount > 0) {
+      insights.push(`${todaySmsCount} ${t('new transactions to verify.')}`);
+    } else if (smsTransactionCount > 0) {
+      insights.push(`${smsTransactionCount} ${t('transactions auto-logged via SMS.')}`);
+    }
+
+    // AI financial tips (friendly and encouraging)
+    const tips = [
+      t("Let's make today a great savings day! "),
+      t("Every little rupee saved counts! "),
+      t("Consistent saving builds big dreams."),
+      t("Tracking your spends is the first step to freedom."),
+      t("Remember to review your daily transactions! "),
+      t("You're doing great with your budget, keep it up! "),
+      t("Hope you're having a wonderful day! Keep smiling. "),
+      t("Small steps everyday lead to big savings. Proud of you!")
+    ];
+
+    // Tamil proverbs & kurals — always shown in Tamil regardless of language
+    const proverbs = [
+      "ஊழையும் உப்பக்கம் காண்பர் உலைவின்றித் தாழாது உஞற்று பவர்.",
+      "தெய்வத்தான் ஆகா தெனினும் முயற்சிதன் மெய்வருத்தக் கூலி தரும்.",
+      "தீயினாற் சுட்டபுண் உள்ளாறும் ஆறாதே நாவினாற் சுட்ட வடு.",
+      "யானை படுத்தாலும் குதிரை மட்டம்.",
+      "ஆடத் தெரியாதவள் முற்றம் கோணல் என்றாளாம்.",
+      "நாய் விற்ற காசு குரைக்கவா செய்யும்?",
+      "அடிமேல் அடி அடித்தால், அம்மியும் நகரும்.",
+      "ஒரு மாட்டுக்கு ஒரு சூடு, ஒரு மனிதனுக்கு ஒரு சொல்.",
+      "வாராத இடத்திற்குப் போகாதே, மதியாதார் வாசலை மிதிக்காதே.",
+      "வல்லவனுக்குப் புல்லும் ஆயுதம்."
+    ];
+
+    insights.push(...tips);
+    insights.push(...proverbs);
+
+    // Pick a random insight or rotate based on time/minutes
+    const seed = currentDate.getMinutes() + currentDate.getDate();
+    const chosenInsight = insights[seed % insights.length];
+
+    // Combine timeGreeting, name, and chosen insight
+    return {
+      prefix: `${timeGreeting}, `,
+      name,
+      suffix: `! ${chosenInsight}`,
+      iconSrc
+    };
+  }, [user?.name, filteredStats.expense, budgetLimit, isOverBudget, goalProgress, savingsGoal.name, allTimePersonalBalance, savingsRate, todaySmsCount, smsTransactionCount, currentDate, t]);
+
   return (
     <motion.div variants={container} initial="hidden" animate="show" className="space-y-3 sm:space-y-4 pb-4">
 
       {/* ── Greeting Pill ── */}
-      {greetingText && (
+      {greeting && (
         <motion.div variants={item}>
-          <div className="g-pill inline-flex items-center gap-2 px-3 py-1.5 select-none">
-            <span className="flex items-center justify-center shrink-0">{greetingIcon}</span>
-            <span className="text-[10px] sm:text-[11px] font-extrabold tracking-wider uppercase text-slate-500 dark:text-slate-400">
-              {greetingText}
+          <div
+            className="g-pill inline-flex items-center gap-2.5 px-3.5 py-1.5 select-none max-w-full overflow-hidden"
+            style={{ borderRadius: '16px' }}
+          >
+            <span className="flex items-center justify-center shrink-0">
+              <img
+                src={greeting.iconSrc}
+                alt="Greeting icon"
+                className="w-[22px] h-[22px] object-contain shrink-0"
+              />
+            </span>
+            <span className="block text-[10px] sm:text-[11px] font-semibold tracking-wide text-slate-600 dark:text-slate-300 line-clamp-2 max-w-[calc(100vw-6rem)]">
+              {greeting.prefix}<span className="font-bold">{greeting.name}</span>{greeting.suffix}
             </span>
           </div>
         </motion.div>
       )}
 
       {/* ── Balance Hero ── */}
-      <BalanceHeroCard balance={allTimePersonalBalance} income={totalIncome} expense={totalExpense} t={t} />
+      <BalanceHeroCard
+        balance={allTimePersonalBalance}
+        income={filteredStats.income}
+        expense={filteredStats.expense}
+        received={filteredStats.received}
+        t={t}
+        balanceFilter={balanceFilter}
+        onFilterChange={setBalanceFilter}
+      />
 
       {/* ── Stat Grid ── */}
-      <motion.div variants={item} className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-4 gap-3">
+      <motion.div variants={item} className="grid grid-cols-1 xs:grid-cols-2 gap-3">
         <StatCard
           title={t('Savings Rate')}
           amount={savingsRate}
@@ -633,22 +831,6 @@ export default function Dashboard() {
             iconColor="text-primary-500"
           />
         </div>
-        <StatCard
-          title={t('Total Income')}
-          amount={totalIncome}
-          icon={TrendingUp}
-          glowColor="bg-emerald-500"
-          iconBg="bg-emerald-500/12"
-          iconColor="text-emerald-500"
-        />
-        <StatCard
-          title={t('Total Expenses')}
-          amount={totalExpense}
-          icon={TrendingDown}
-          glowColor="bg-rose-500"
-          iconBg="bg-rose-500/12"
-          iconColor="text-rose-400"
-        />
       </motion.div>
 
       {/* ── Budget Alert ── */}
@@ -667,7 +849,7 @@ export default function Dashboard() {
               <div className="flex-1 min-w-0">
                 <h4 className="text-rose-400 font-bold text-sm">{t('Budget Exceeded')}</h4>
                 <p className="text-[10px] sm:text-xs text-slate-400 mt-0.5 leading-relaxed">
-                  Expenses (₹{totalExpense.toLocaleString()}) exceeded your ₹{budgetLimit.toLocaleString()} limit.
+                  Expenses (₹{filteredStats.expense.toLocaleString()}) exceeded your ₹{budgetLimit.toLocaleString()} limit.
                 </p>
               </div>
             </div>
@@ -689,8 +871,8 @@ export default function Dashboard() {
           onClick={() => navigate('/transactions')}
           className="g-panel overflow-hidden p-4 sm:p-5 cursor-pointer group"
         >
-          <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 via-transparent to-blue-500/5 pointer-events-none" />
-          <div className="absolute -right-12 -top-12 w-48 h-48 rounded-full bg-cyan-400/8 blur-3xl pointer-events-none" />
+          <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 via-transparent to-blue-500/5 pointer-events-none dark:hidden" />
+          <div className="absolute -right-12 -top-12 w-48 h-48 rounded-full bg-cyan-400/8 blur-3xl pointer-events-none dark:hidden" />
           <div className="relative z-10 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="g-icon-bubble w-10 h-10 rounded-[13px] bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center shadow-lg shadow-cyan-500/20">
@@ -742,12 +924,19 @@ export default function Dashboard() {
               <button
                 key={f}
                 onClick={() => setGraphFilter(f)}
-                className={`relative px-3 py-1.5 text-[10px] font-bold rounded-[10px] transition-all duration-200 ${graphFilter === f
-                    ? 'g-filter-active text-primary-500 dark:text-primary-400'
-                    : 'text-slate-400 dark:text-slate-500 hover:text-slate-600'
+                className={`relative px-3 py-1.5 text-[10px] font-bold rounded-[10px] transition-colors duration-200 ${graphFilter === f
+                  ? 'text-primary-500 dark:text-primary-400'
+                  : 'text-slate-400 dark:text-slate-500 hover:text-slate-600'
                   }`}
               >
-                {t(f)}
+                {graphFilter === f && (
+                  <motion.span
+                    layoutId="graph-filter-indicator"
+                    className="absolute inset-0 rounded-[10px] bg-primary-500/10 dark:bg-primary-400/15 border border-primary-500/20 dark:border-primary-400/20"
+                    transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                  />
+                )}
+                <span className="relative z-10">{t(f)}</span>
               </button>
             ))}
           </div>
@@ -859,7 +1048,12 @@ export default function Dashboard() {
               initial={{ scale: 0.90, opacity: 0, y: 20, filter: 'blur(5px)' }}
               animate={{ scale: 1, opacity: 1, y: 0, filter: 'blur(0px)' }}
               exit={{ scale: 0.92, opacity: 0, y: 10, filter: 'blur(4px)' }}
-              transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+              transition={{
+                opacity: { type: 'spring', stiffness: 400, damping: 30 },
+                scale: { type: 'spring', stiffness: 400, damping: 30 },
+                y: { type: 'spring', stiffness: 400, damping: 30 },
+                filter: { type: 'tween', ease: 'easeOut', duration: 0.2 }
+              }}
               onClick={e => e.stopPropagation()}
               className="relative w-full max-w-sm g-modal p-6"
             >
@@ -911,7 +1105,7 @@ export default function Dashboard() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[9999] bg-white/95 dark:bg-[#0c0c1e]/95 backdrop-blur-2xl flex flex-col landscape:flex-row"
+              className="fixed inset-0 z-[9999] bg-white/95 dark:bg-black/95 backdrop-blur-2xl flex flex-col landscape:flex-row"
             >
               {/* Controls panel */}
               <div className="p-4 pt-[calc(env(safe-area-inset-top,24px)+20px)] sm:pt-[calc(env(safe-area-inset-top,24px)+24px)] flex flex-row landscape:flex-col justify-between items-center landscape:items-start border-b landscape:border-b-0 landscape:border-r border-slate-200/40 dark:border-white/[0.06] landscape:w-48 shrink-0">
@@ -931,12 +1125,19 @@ export default function Dashboard() {
                       <button
                         key={f}
                         onClick={() => setGraphFilter(f)}
-                        className={`px-3 py-1.5 landscape:py-2 text-xs font-bold rounded-[10px] transition-all ${graphFilter === f
-                            ? 'g-filter-active text-primary-500 dark:text-primary-400'
-                            : 'text-slate-400 hover:text-slate-600'
+                        className={`relative px-3 py-1.5 landscape:py-2 text-xs font-bold rounded-[10px] transition-colors duration-200 ${graphFilter === f
+                          ? 'text-primary-500 dark:text-primary-400'
+                          : 'text-slate-400 dark:text-slate-500 hover:text-slate-600'
                           }`}
                       >
-                        {t(f)}
+                        {graphFilter === f && (
+                          <motion.span
+                            layoutId="fullscreen-graph-filter-indicator"
+                            className="absolute inset-0 rounded-[10px] bg-primary-500/10 dark:bg-primary-400/15 border border-primary-500/20 dark:border-primary-400/20"
+                            transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                          />
+                        )}
+                        <span className="relative z-10">{t(f)}</span>
                       </button>
                     ))}
                   </div>

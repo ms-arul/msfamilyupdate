@@ -3,6 +3,7 @@ import { compressForProofs } from '../utils/imageCompressor';
 import { downloadFile, getExtFromUrl } from '../utils/downloadHelper';
 import { createPortal } from 'react-dom';
 import HeaderActions from '../components/ui/HeaderActions';
+import { CachedImage } from '../components/ui/CachedImage';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -46,6 +47,21 @@ const proofCategories = [
   { id: 'financial', labelKey: 'Financial', icon: CreditCard },
   { id: 'vehicle', labelKey: 'Vehicle', icon: CarFront },
 ];
+
+const fileToBase64 = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        resolve(reader.result.split(',')[1]);
+      } else {
+        reject(new Error('Failed to convert file to base64'));
+      }
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+};
 
 export default function MyProofs() {
   const { user } = useAuth();
@@ -147,29 +163,6 @@ export default function MyProofs() {
   useEffect(() => {
     fetchProofs();
   }, [fetchProofs]);
-
-  // Handle Shared Data (from Android native Share Targets)
-  useEffect(() => {
-    const sharedData = location.state?.sharedData;
-    if (sharedData?.imageUri) {
-       const processSharedImage = async () => {
-         try {
-           const url = Capacitor.isNativePlatform() ? Capacitor.convertFileSrc(sharedData.imageUri) : sharedData.imageUri;
-           const res = await fetch(url);
-           const blob = await res.blob();
-           const file = new File([blob], "shared_proof.jpg", { type: blob.type || "image/jpeg" });
-           
-           // We will handle this in a separate effect below where handleFileUpload is defined
-           window.sharedFileBuffer = file;
-         } catch (e) {
-           console.error("Shared proof error:", e);
-         }
-       };
-       // clean up history to prevent re-triggering
-       window.history.replaceState(null, '');
-       processSharedImage();
-     }
-  }, [location.state]);
 
   // Sort: pinned first, then by created_at
   const sortedProofs = [...proofs].sort((a, b) => {
@@ -399,130 +392,136 @@ export default function MyProofs() {
     }
   };
 
-  // OCR Processing
-  const fileToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        if (typeof reader.result === 'string') {
-          resolve(reader.result.split(',')[1]);
-        } else {
-          reject(new Error('Failed to convert file to base64'));
-        }
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-  };
-
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement> | { target: { files: FileList | null } }) => {
+  const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement> | { target: { files: FileList | null } }) => {
     let file = e.target.files?.[0];
     if (!file) return;
 
-    if (!file.type.startsWith('image/')) {
-      alert('Please upload a valid image file.');
+    const isPdf = file.type === 'application/pdf';
+    if (!file.type.startsWith('image/') && !isPdf) {
+      alert('Please upload a valid image or PDF document.');
+      return;
+    }
+
+    // Limit file size to 10MB for PDFs, 5MB for images
+    const maxSize = isPdf ? 10 * 1024 * 1024 : 5 * 1024 * 1024;
+    if (file.size > maxSize) {
+      alert(`File size exceeds the limit (${isPdf ? '10MB' : '5MB'}).`);
       return;
     }
 
     setIsUploading(true);
-    setUploadProgress('Compressing & analyzing...');
+    setUploadProgress(isPdf ? 'Preparing PDF...' : 'Compressing & analyzing...');
     setShowUploadModal(true);
 
     try {
-      file = await compressForProofs(file);
-      
-      let extractedTitle = 'Scanned Document';
+      if (!isPdf) {
+        file = await compressForProofs(file);
+      }
+
+      let extractedTitle = isPdf ? file.name.replace(/\.[^/.]+$/, "") : 'Scanned Document';
       let extractedDocNum = 'N/A';
       let extractedCat = 'identity';
-      
+
       const isNative = Capacitor.isNativePlatform();
       let geminiSuccess = false;
       const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
 
-      // Try Gemini AI first
-      if (apiKey) {
-        try {
-          const base64Image = await fileToBase64(file);
-          const requestBody = {
-            system_instruction: {
-              parts: [{ text: "You are an expert document parser. Analyze the uploaded ID, bill, or proof. Extract the 'title', the 'documentNumber'. And categorize it into EXACTLY ONE of these: 'identity', 'financial', or 'vehicle'. Output ONLY valid JSON containing these three keys." }]
-            },
-            contents: [{
-              parts: [
-                { text: 'Extract data to JSON: {"title": "", "documentNumber": "", "category": "identity|financial|vehicle"}' },
-                { inline_data: { mime_type: file.type || 'image/jpeg', data: base64Image } },
-              ]
-            }],
-            generationConfig: { response_mime_type: 'application/json', temperature: 0.1 },
-          };
+      if (isPdf) {
+        setNewProofForm(prev => ({
+          ...prev,
+          title: extractedTitle,
+          documentNumber: 'N/A',
+          category: 'identity',
+          localImage: file ?? null,
+          imageUrl: ''
+        }));
+        setUploadProgress('');
+      } else {
+        // Try Gemini AI first
+        if (apiKey) {
+          try {
+            const base64Image = await fileToBase64(file);
+            const requestBody = {
+              system_instruction: {
+                parts: [{ text: "You are an expert document parser. Analyze the uploaded ID, bill, or proof. Extract the 'title', the 'documentNumber'. And categorize it into EXACTLY ONE of these: 'identity', 'financial', or 'vehicle'. Output ONLY valid JSON containing these three keys." }]
+              },
+              contents: [{
+                parts: [
+                  { text: 'Extract data to JSON: {"title": "", "documentNumber": "", "category": "identity|financial|vehicle"}' },
+                  { inline_data: { mime_type: file.type || 'image/jpeg', data: base64Image } },
+                ]
+              }],
+              generationConfig: { response_mime_type: 'application/json', temperature: 0.1 },
+            };
 
-          const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-            { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestBody) }
-          );
+            const response = await fetch(
+              `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+              { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestBody) }
+            );
 
-          if (response.ok) {
-            const data = await response.json();
-            const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (responseText) {
-              const cleanJson = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
-              const extracted = JSON.parse(cleanJson);
-              
-              extractedTitle = extracted.title || 'Unknown Document';
-              extractedDocNum = extracted.documentNumber || 'N/A';
-              extractedCat = extracted.category || 'identity';
-              geminiSuccess = true;
+            if (response.ok) {
+              const data = await response.json();
+              const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+              if (responseText) {
+                const cleanJson = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+                const extracted = JSON.parse(cleanJson);
+
+                extractedTitle = extracted.title || 'Unknown Document';
+                extractedDocNum = extracted.documentNumber || 'N/A';
+                extractedCat = extracted.category || 'identity';
+                geminiSuccess = true;
+              }
             }
+          } catch (geminiErr) {
+            console.warn('Gemini extraction failed, falling back...', geminiErr);
           }
-        } catch (geminiErr) {
-          console.warn('Gemini extraction failed, falling back...', geminiErr);
         }
+
+        if (!geminiSuccess && isNative) {
+          // --- Fallback NATIVE: Google ML Kit ---
+          const base64Data = await fileToBase64(file);
+          const result = await (CapacitorPluginMlKitTextRecognition as any).detectText({ base64Image: base64Data });
+          const text = result.text || '';
+
+          if (!text || text.trim() === '') {
+            throw new Error('No text detected by ML Kit.');
+          }
+
+          // Simple heuristic parsing for Native
+          if (text.match(/\d{4}\s?\d{4}\s?\d{4}/)) {
+            extractedTitle = 'Aadhar Card';
+            extractedDocNum = text.match(/\d{4}\s?\d{4}\s?\d{4}/)?.[0] || 'N/A';
+          } else if (text.match(/[A-Z]{5}[0-9]{4}[A-Z]{1}/)) {
+            extractedTitle = 'PAN Card';
+            extractedDocNum = text.match(/[A-Z]{5}[0-9]{4}[A-Z]{1}/)?.[0] || 'N/A';
+            extractedCat = 'financial';
+          } else if (text.toLowerCase().includes('invoice') || text.toLowerCase().includes('bill')) {
+            extractedTitle = 'Invoice/Bill';
+            extractedCat = 'financial';
+          } else if (text.toLowerCase().includes('vehicle') || text.toLowerCase().includes('registration')) {
+            extractedTitle = 'Vehicle RC';
+            extractedCat = 'vehicle';
+          } else if (text.match(/[A-Z]{2}[0-9]{2}[A-Z]{1,2}[0-9]{4}/)) {
+            extractedTitle = 'Vehicle Reg';
+            extractedCat = 'vehicle';
+            extractedDocNum = text.match(/[A-Z]{2}[0-9]{2}[A-Z]{1,2}[0-9]{4}/)?.[0] || 'N/A';
+          } else {
+            throw new Error('Could not categorize document via ML Kit.');
+          }
+        } else if (!geminiSuccess && !isNative) {
+          throw new Error('AI extraction failed.');
+        }
+
+        setNewProofForm(prev => ({
+          ...prev,
+          title: extractedTitle,
+          documentNumber: extractedDocNum,
+          category: extractedCat,
+          localImage: file ?? null,
+          imageUrl: file ? URL.createObjectURL(file) : ''
+        }));
+        setUploadProgress('');
       }
-
-      if (!geminiSuccess && isNative) {
-        // --- Fallback NATIVE: Google ML Kit ---
-        const base64Data = await fileToBase64(file);
-        const result = await (CapacitorPluginMlKitTextRecognition as any).detectText({ base64Image: base64Data });
-        const text = result.text || '';
-        
-        if (!text || text.trim() === '') {
-          throw new Error('No text detected by ML Kit.');
-        }
-
-        // Simple heuristic parsing for Native
-        if (text.match(/\d{4}\s?\d{4}\s?\d{4}/)) {
-           extractedTitle = 'Aadhar Card';
-           extractedDocNum = text.match(/\d{4}\s?\d{4}\s?\d{4}/)?.[0] || 'N/A';
-        } else if (text.match(/[A-Z]{5}[0-9]{4}[A-Z]{1}/)) {
-           extractedTitle = 'PAN Card';
-           extractedDocNum = text.match(/[A-Z]{5}[0-9]{4}[A-Z]{1}/)?.[0] || 'N/A';
-           extractedCat = 'financial';
-        } else if (text.toLowerCase().includes('invoice') || text.toLowerCase().includes('bill')) {
-           extractedTitle = 'Invoice/Bill';
-           extractedCat = 'financial';
-        } else if (text.toLowerCase().includes('vehicle') || text.toLowerCase().includes('registration')) {
-           extractedTitle = 'Vehicle RC';
-           extractedCat = 'vehicle';
-        } else if (text.match(/[A-Z]{2}[0-9]{2}[A-Z]{1,2}[0-9]{4}/)) {
-           extractedTitle = 'Vehicle Reg';
-           extractedCat = 'vehicle';
-           extractedDocNum = text.match(/[A-Z]{2}[0-9]{2}[A-Z]{1,2}[0-9]{4}/)?.[0] || 'N/A';
-        } else {
-           throw new Error('Could not categorize document via ML Kit.');
-        }
-      } else if (!geminiSuccess && !isNative) {
-        throw new Error('AI extraction failed.');
-      }
-
-      setNewProofForm(prev => ({
-        ...prev,
-        title: extractedTitle,
-        documentNumber: extractedDocNum,
-        category: extractedCat,
-        localImage: file ?? null,
-        imageUrl: file ? URL.createObjectURL(file) : ''
-      }));
-      setUploadProgress('');
 
     } catch (err) {
       console.error('OCR Error:', err);
@@ -537,7 +536,7 @@ export default function MyProofs() {
       setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
-  };
+  }, []);
 
   const handleBackImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     let file = e.target.files?.[0];
@@ -555,7 +554,7 @@ export default function MyProofs() {
   const generateSummaryFromBase64 = async (file: File): Promise<string[] | null> => {
     const isNative = Capacitor.isNativePlatform();
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-    
+
     if (apiKey) {
       try {
         const base64Data = await fileToBase64(file);
@@ -594,13 +593,13 @@ export default function MyProofs() {
         const result = await (CapacitorPluginMlKitTextRecognition as any).detectText({ base64Image: base64Data });
         const text = result.text || '';
         const lines = text.split('\n').map((l: string) => l.trim()).filter((l: string) => l.length > 5).slice(0, 5);
-        while(lines.length < 5) lines.push('Additional details unavailable');
+        while (lines.length < 5) lines.push('Additional details unavailable');
         return lines;
       } catch {
         return Array(5).fill('Analysis unavailable');
       }
     }
-    
+
     return Array(5).fill('Analysis unavailable');
   };
 
@@ -608,17 +607,20 @@ export default function MyProofs() {
     if (!newProofForm.title || !newProofForm.localImage || !user) return;
 
     setIsUploading(true);
-    setUploadProgress('Uploading images...');
+    setUploadProgress('Uploading document...');
 
     try {
-      // Upload front image
+      // Upload front image or PDF
       const fileExt = newProofForm.localImage.name.split('.').pop();
       const fileName = `${Date.now()}_front_${Math.random().toString(36).substring(7)}.${fileExt}`;
       const filePath = `my_proofs/${user.id}/${fileName}`;
 
       const { error: uploadError } = await supabase.storage
         .from('proofs')
-        .upload(filePath, newProofForm.localImage);
+        .upload(filePath, newProofForm.localImage, {
+          contentType: newProofForm.localImage.type,
+          upsert: true
+        });
 
       if (uploadError) throw uploadError;
       const { data: { publicUrl } } = supabase.storage.from('proofs').getPublicUrl(filePath);
@@ -632,7 +634,10 @@ export default function MyProofs() {
 
         const { error: backUploadError } = await supabase.storage
           .from('proofs')
-          .upload(backPath, newProofForm.backLocalImage);
+          .upload(backPath, newProofForm.backLocalImage, {
+            contentType: newProofForm.backLocalImage.type,
+            upsert: true
+          });
 
         if (!backUploadError) {
           const { data: backData } = supabase.storage.from('proofs').getPublicUrl(backPath);
@@ -640,13 +645,20 @@ export default function MyProofs() {
         }
       }
 
-      // Generate local summary from the front image during upload
-      setUploadProgress('summarizing your document...');
-      const summaryPoints = await generateSummaryFromBase64(newProofForm.localImage);
-      const aiSummaryJson = summaryPoints ? JSON.stringify(summaryPoints) : null;
+      // Generate local summary from the front image during upload (skip if PDF)
+      let aiSummaryJson: string | null = null;
+      const isPdf = newProofForm.localImage.type === 'application/pdf';
+      if (!isPdf) {
+        setUploadProgress('summarizing your document...');
+        const summaryPoints = await generateSummaryFromBase64(newProofForm.localImage);
+        aiSummaryJson = summaryPoints ? JSON.stringify(summaryPoints) : null;
+      }
 
-      // Save to database with summary
-      const { data: dbData, error: dbError } = await supabase
+      // Save to database with summary, file type, and file size (with fallback in case columns are missing)
+      let dbData: any = null;
+      let dbError: any = null;
+
+      const firstAttempt = await supabase
         .from('my_proofs')
         .insert({
           user_id: user.id,
@@ -656,9 +668,35 @@ export default function MyProofs() {
           image_url: publicUrl,
           back_image_url: backPublicUrl,
           ai_summary: aiSummaryJson,
+          file_type: newProofForm.localImage.type,
+          file_size: newProofForm.localImage.size,
         })
         .select('*')
         .single();
+
+      dbData = firstAttempt.data;
+      dbError = firstAttempt.error;
+
+      // Fallback: If DB insert fails because columns don't exist yet, retry without file_type and file_size
+      if (dbError && (dbError.message?.includes('file_size') || dbError.message?.includes('file_type') || dbError.code === 'PGRST204')) {
+        console.warn('Database my_proofs table does not have file_size or file_type columns. Retrying insert without them...', dbError.message);
+        const secondAttempt = await supabase
+          .from('my_proofs')
+          .insert({
+            user_id: user.id,
+            title: newProofForm.title,
+            document_number: newProofForm.documentNumber,
+            category: newProofForm.category,
+            image_url: publicUrl,
+            back_image_url: backPublicUrl,
+            ai_summary: aiSummaryJson,
+          })
+          .select('*')
+          .single();
+
+        dbData = secondAttempt.data;
+        dbError = secondAttempt.error;
+      }
 
       if (dbError) throw dbError;
 
@@ -676,13 +714,39 @@ export default function MyProofs() {
       setUploadProgress('');
     }
   };
-
+  // Handle Shared Data (from Android native Share Targets)
   useEffect(() => {
-    if (window.sharedFileBuffer) {
-      handleFileUpload({ target: { files: { 0: window.sharedFileBuffer, length: 1, item: (i: number) => window.sharedFileBuffer || null } as unknown as FileList } });
-      delete window.sharedFileBuffer;
+    const sharedData = location.state?.sharedData;
+    if (sharedData?.imageUri || sharedData?.pdfUri) {
+      const processSharedFile = async () => {
+        try {
+          const fileUri = sharedData.imageUri || sharedData.pdfUri;
+          const isPdf = !!sharedData.pdfUri;
+          const url = Capacitor.isNativePlatform() ? Capacitor.convertFileSrc(fileUri) : fileUri;
+          const res = await fetch(url);
+          const blob = await res.blob();
+          const filename = isPdf ? "shared_proof.pdf" : "shared_proof.jpg";
+          const fileType = isPdf ? "application/pdf" : (blob.type || "image/jpeg");
+          const file = new File([blob], filename, { type: fileType });
+
+          handleFileUpload({
+            target: {
+              files: {
+                0: file,
+                length: 1,
+                item: (i: number) => file
+              } as unknown as FileList
+            }
+          });
+        } catch (e) {
+          console.error("Shared proof error:", e);
+        }
+      };
+      // clean up history to prevent re-triggering
+      window.history.replaceState(null, '');
+      processSharedFile();
     }
-  }, [handleFileUpload]);
+  }, [location.state, handleFileUpload]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -845,7 +909,7 @@ export default function MyProofs() {
               type="file"
               ref={fileInputRef}
               className="hidden"
-              accept="image/*"
+              accept="image/jpeg,image/png,image/webp,application/pdf"
               onChange={handleFileUpload}
             />
           </div>
@@ -893,12 +957,29 @@ export default function MyProofs() {
                 )}
 
                 <div className="relative aspect-[1.58] overflow-hidden rounded-[14px]">
-                  <div className="absolute inset-0 bg-slate-900/10 z-10 group-hover:bg-transparent transition-all" />
-                  <img
-                    src={proof.image_url}
-                    alt={proof.title}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"
-                  />
+                  {proof.image_url?.toLowerCase().endsWith('.pdf') || proof.file_type === 'application/pdf' ? (
+                    <div className="w-full h-full bg-rose-50 dark:bg-red-950/20 flex flex-col items-center justify-center border border-rose-100 dark:border-rose-900/30">
+                      <div className="w-12 h-12 rounded-xl bg-rose-500/10 text-rose-500 flex items-center justify-center mb-1 group-hover:scale-110 transition-transform duration-300">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-rose-500">
+                          <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+                          <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+                          <path d="M10 9H8" />
+                          <path d="M16 13H8" />
+                          <path d="M16 17H8" />
+                        </svg>
+                      </div>
+                      <span className="text-[10px] font-extrabold text-rose-600 dark:text-rose-400 tracking-wider uppercase">PDF DOCUMENT</span>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="absolute inset-0 bg-slate-900/10 z-10 group-hover:bg-transparent transition-all" />
+                      <CachedImage
+                        url={proof.image_url}
+                        alt={proof.title}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"
+                      />
+                    </>
+                  )}
                   <div className="absolute inset-0 z-20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-slate-900/40 backdrop-blur-[2px]">
                     <div className="flex items-center gap-2 text-white bg-black/40 px-4 py-2 rounded-full font-medium">
                       <Eye size={18} /> View Full
@@ -1002,11 +1083,26 @@ export default function MyProofs() {
                       <div className="grid grid-cols-2 gap-3">
                         <div>
                           <p className="text-[11px] font-bold text-slate-600 uppercase tracking-widest mb-2">Front Side</p>
-                          <div className="aspect-[1.58] bg-slate-100 rounded-xl overflow-hidden border border-border relative group">
-                            {newProofForm.imageUrl ? (
+                          <div className="aspect-[1.58] bg-slate-100 rounded-xl overflow-hidden border border-border relative group flex flex-col items-center justify-center">
+                            {newProofForm.localImage?.type === 'application/pdf' ? (
+                              <div className="flex flex-col items-center justify-center p-4">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-rose-500 mb-1 animate-pulse">
+                                  <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+                                  <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+                                </svg>
+                                <span className="text-[11px] font-bold text-slate-700 truncate max-w-[120px]">{newProofForm.localImage.name}</span>
+                                <span className="text-[9px] text-slate-400 font-semibold">{(newProofForm.localImage.size / (1024 * 1024)).toFixed(2)} MB</span>
+                                <button
+                                  onClick={() => setNewProofForm(prev => ({ ...prev, localImage: null, imageUrl: '' }))}
+                                  className="absolute top-2 right-2 p-1.5 rounded-lg bg-rose-500 text-white opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            ) : newProofForm.imageUrl ? (
                               <>
                                 <img src={newProofForm.imageUrl} className="w-full h-full object-cover" alt="Front" />
-                                <button 
+                                <button
                                   onClick={() => setNewProofForm(prev => ({ ...prev, localImage: null, imageUrl: '' }))}
                                   className="absolute top-2 right-2 p-1.5 rounded-lg bg-rose-500 text-white opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
                                 >
@@ -1014,20 +1110,20 @@ export default function MyProofs() {
                                 </button>
                               </>
                             ) : (
-                              <div className="w-full h-full flex items-center justify-center text-slate-300 text-xs">No image</div>
+                              <div className="w-full h-full flex items-center justify-center text-slate-300 text-xs">No file</div>
                             )}
                           </div>
                         </div>
                         <div>
                           <p className="text-[11px] font-bold text-slate-600 uppercase tracking-widest mb-2">Back Side</p>
                           <div
-                            onClick={() => { if(!newProofForm.backImageUrl) { suppressLockForFilePicker(); backInputRef.current?.click(); } }}
+                            onClick={() => { if (!newProofForm.backImageUrl) { suppressLockForFilePicker(); backInputRef.current?.click(); } }}
                             className={`aspect-[1.58] bg-slate-50 rounded-xl overflow-hidden border-2 border-dashed border-slate-200 relative transition-all group ${!newProofForm.backImageUrl ? 'cursor-pointer hover:border-primary-300 hover:bg-primary-50/30' : ''}`}
                           >
                             {newProofForm.backImageUrl ? (
                               <>
                                 <img src={newProofForm.backImageUrl} className="w-full h-full object-cover" alt="Back" />
-                                <button 
+                                <button
                                   onClick={(e) => { e.stopPropagation(); setNewProofForm(prev => ({ ...prev, backLocalImage: null, backImageUrl: '' })); }}
                                   className="absolute top-2 right-2 p-1.5 rounded-lg bg-rose-500 text-white opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
                                 >
@@ -1105,7 +1201,7 @@ export default function MyProofs() {
         document.body
       )}
 
-      {/* FULL SCREEN LIGHTBOX - LIGHT THEME */}
+      {/* FULL SCREEN LIGHTBOX - AMOLED & LIGHT THEME CAPABLE */}
       {createPortal(
         <AnimatePresence>
           {activeProof && (
@@ -1114,21 +1210,21 @@ export default function MyProofs() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={closeLightbox}
-              className="fixed inset-0 z-[9999] bg-white/95 backdrop-blur-xl flex flex-col md:items-center md:justify-center overflow-y-auto"
+              className="fixed inset-0 z-[9999] bg-white/95 dark:bg-black/98 backdrop-blur-xl flex flex-col md:items-center md:justify-center overflow-y-auto"
             >
               {/* Top bar optimized for mobile + desktop */}
-              <div className="sticky md:fixed top-0 left-0 right-0 z-50 flex flex-col md:flex-row md:items-center justify-between px-3 md:px-6 pt-[calc(env(safe-area-inset-top,24px)+8px)] pb-3 md:py-4 bg-white/95 backdrop-blur-md border-b border-slate-100 gap-2 md:gap-0" onClick={e => e.stopPropagation()}>
+              <div className="sticky md:fixed top-0 left-0 right-0 z-50 flex flex-col md:flex-row md:items-center justify-between px-3 md:px-6 pt-[calc(env(safe-area-inset-top,24px)+8px)] pb-3 md:py-4 bg-white/95 dark:bg-black/95 backdrop-blur-md border-b border-slate-100 dark:border-slate-900 gap-2 md:gap-0" onClick={e => e.stopPropagation()}>
                 {/* Title & Document Number */}
                 <div className="flex items-start justify-between w-full md:w-auto">
                   <div className="overflow-hidden pr-2">
-                    <h2 className="text-[15px] md:text-xl font-extrabold text-slate-900 leading-tight truncate">{activeProof.title}</h2>
+                    <h2 className="text-[15px] md:text-xl font-extrabold text-slate-900 dark:text-white leading-tight truncate">{activeProof.title}</h2>
                     <div className="flex items-center gap-2 mt-0.5 md:mt-1">
-                      <span className="font-mono text-[10px] md:text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md border border-slate-200 truncate">
+                      <span className="font-mono text-[10px] md:text-xs bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-350 px-2 py-0.5 rounded-md border border-slate-200 dark:border-slate-800 truncate">
                         {activeProof.document_number}
                       </span>
                       <button
                         onClick={(e) => copyToClipboard(e, activeProof.document_number, 'lightbox')}
-                        className="p-1 rounded-md hover:bg-slate-100 text-slate-400 hover:text-primary-500 transition-colors text-[10px] flex items-center gap-1 shrink-0"
+                        className="p-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-900 text-slate-400 dark:text-slate-500 hover:text-primary-500 dark:hover:text-primary-400 transition-colors text-[10px] flex items-center gap-1 shrink-0"
                       >
                         {copiedId === 'lightbox' ? <CheckCircle2 size={12} className="text-success-500" /> : <Copy size={12} />}
                         <span className="font-medium hidden md:block">Copy</span>
@@ -1138,7 +1234,7 @@ export default function MyProofs() {
                   {/* Mobile Close Button */}
                   <button
                     onClick={closeLightbox}
-                    className="md:hidden p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 transition-colors shrink-0"
+                    className="md:hidden p-2 rounded-xl bg-slate-100 dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors shrink-0"
                   >
                     <X size={16} />
                   </button>
@@ -1146,18 +1242,18 @@ export default function MyProofs() {
 
                 {/* Zoom Controls & Desktop Close */}
                 <div className="flex items-center justify-between md:justify-end gap-2 w-full md:w-auto mt-1 md:mt-0">
-                  <div className="flex items-center bg-slate-100 rounded-xl p-0.5 w-full md:w-auto justify-between md:justify-center">
+                  <div className="flex items-center bg-slate-100 dark:bg-slate-900 rounded-xl p-0.5 w-full md:w-auto justify-between md:justify-center">
                     <button
                       onClick={() => { setZoomLevel(z => { const nz = Math.max(0.5, z - 0.25); if (nz <= 1) setPanOffset({ x: 0, y: 0 }); return nz; }); }}
-                      className="p-2 md:p-2 flex-1 md:flex-none flex justify-center rounded-lg hover:bg-white hover:shadow-sm text-slate-600 transition-all font-medium"
+                      className="p-2 md:p-2 flex-1 md:flex-none flex justify-center rounded-lg hover:bg-white dark:hover:bg-slate-800 hover:shadow-sm text-slate-600 dark:text-slate-350 transition-all font-medium"
                       title="Zoom Out"
                     >
                       <ZoomOut size={16} />
                     </button>
-                    <span className="text-xs font-bold text-slate-600 w-12 text-center">{Math.round(zoomLevel * 100)}%</span>
+                    <span className="text-xs font-bold text-slate-600 dark:text-slate-300 w-12 text-center">{Math.round(zoomLevel * 100)}%</span>
                     <button
                       onClick={() => setZoomLevel(z => Math.min(4, z + 0.25))}
-                      className="p-2 md:p-2 flex-1 md:flex-none flex justify-center rounded-lg hover:bg-white hover:shadow-sm text-slate-600 transition-all font-medium"
+                      className="p-2 md:p-2 flex-1 md:flex-none flex justify-center rounded-lg hover:bg-white dark:hover:bg-slate-800 hover:shadow-sm text-slate-600 dark:text-slate-350 transition-all font-medium"
                       title="Zoom In"
                     >
                       <ZoomIn size={16} />
@@ -1166,14 +1262,14 @@ export default function MyProofs() {
                   {/* Desktop Close Button */}
                   <button
                     onClick={closeLightbox}
-                    className="hidden md:block p-2 md:p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors ml-1 shrink-0"
+                    className="hidden md:block p-2 md:p-2.5 rounded-xl bg-slate-100 dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-350 transition-colors ml-1 shrink-0"
                   >
                     <X size={18} />
                   </button>
                 </div>
               </div>
 
-              {/* Image area - Pinch-to-zoom enabled */}
+              {/* Image / PDF area - Pinch-to-zoom enabled */}
               <div
                 ref={imageContainerRef}
                 className="flex-1 flex flex-col items-center p-4 pt-[calc(env(safe-area-inset-top,24px)+96px)] md:pt-28 pb-20 w-full overflow-auto"
@@ -1183,7 +1279,7 @@ export default function MyProofs() {
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="flex flex-col items-center w-full max-w-[56rem]"
+                  className="flex flex-col items-center w-full max-w-[56rem] my-auto"
                 >
                   <div
                     style={{
@@ -1196,28 +1292,73 @@ export default function MyProofs() {
                     }}
                     className="w-full flex flex-col items-center"
                   >
-                    {/* Front image */}
-                    <div className="w-full rounded-2xl overflow-hidden shadow-xl border border-slate-200 bg-white mb-4">
-                      <img
-                        src={activeProof.image_url}
-                        alt={`${activeProof.title} - Front`}
-                        className="w-full object-contain select-none"
-                        style={{ maxHeight: zoomLevel <= 1 ? '75vh' : 'none' }}
-                        draggable={false}
-                      />
-                    </div>
+                    {activeProof.image_url?.toLowerCase().endsWith('.pdf') || activeProof.file_type === 'application/pdf' ? (
+                      <div className="w-full max-w-2xl md:max-w-3xl bg-slate-50 dark:bg-slate-900 rounded-3xl p-3 border border-slate-200 dark:border-slate-800/80 flex flex-col gap-4 shadow-lg mb-4">
+                        {/* Inline PDF Viewer Controls bar */}
+                        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 bg-white dark:bg-black/60 rounded-2xl border border-slate-100 dark:border-slate-800/80 shadow-sm">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+                            <span className="text-[10px] font-extrabold text-slate-700 dark:text-slate-200 uppercase tracking-widest">
+                              In-App PDF Viewer
+                            </span>
+                          </div>
 
-                    {/* Back image if exists */}
-                    {activeProof.back_image_url && (
-                      <div className="w-full rounded-2xl overflow-hidden shadow-xl border border-slate-200 bg-white">
-                        <img
-                          src={activeProof.back_image_url}
-                          alt={`${activeProof.title} - Back`}
-                          className="w-full object-contain select-none"
-                          style={{ maxHeight: zoomLevel <= 1 ? '75vh' : 'none' }}
-                          draggable={false}
-                        />
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              if (Capacitor.isNativePlatform()) {
+                                downloadProofImage(activeProof);
+                              } else {
+                                window.open(activeProof.image_url, '_blank');
+                              }
+                            }}
+                            className="flex items-center gap-1.5 bg-rose-600 hover:bg-rose-500 dark:bg-rose-700 dark:hover:bg-rose-600 text-white px-4 py-2 rounded-xl font-bold transition-all text-xs shadow-md shadow-rose-600/10 active:scale-95 pointer-events-auto"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" /></svg>
+                            {Capacitor.isNativePlatform() ? 'Open PDF Natively' : 'Open PDF in New Tab'}
+                          </button>
+                        </div>
+
+                        {/* Interactive Frame with Portrait aspect ratio to match standard A4/Letter PDFs */}
+                        <div className="w-full aspect-[0.7] md:aspect-[0.707] min-h-[55vh] md:min-h-[75vh] rounded-2xl overflow-hidden bg-white dark:bg-slate-950 relative shadow-inner border border-slate-100 dark:border-slate-800">
+                          <iframe
+                            src={
+                              Capacitor.isNativePlatform()
+                                ? `https://docs.google.com/viewer?url=${encodeURIComponent(activeProof.image_url)}&embedded=true`
+                                : `${activeProof.image_url}#toolbar=0&navpanes=0&view=FitH`
+                            }
+                            title={activeProof.title}
+                            className="w-full h-full border-0 absolute inset-0 rounded-2xl bg-white dark:bg-slate-950"
+                            allowFullScreen
+                          />
+                        </div>
                       </div>
+                    ) : (
+                      <>
+                        {/* Front image */}
+                        <div className="w-full max-w-2xl mx-auto rounded-2xl overflow-hidden shadow-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 mb-4">
+                          <CachedImage
+                            url={activeProof.image_url}
+                            alt={`${activeProof.title} - Front`}
+                            className="w-full max-h-[70vh] object-contain mx-auto select-none"
+                            style={{ maxHeight: zoomLevel <= 1 ? '70vh' : 'none' }}
+                            draggable={false}
+                          />
+                        </div>
+
+                        {/* Back image if exists */}
+                        {activeProof.back_image_url && (
+                          <div className="w-full max-w-2xl mx-auto rounded-2xl overflow-hidden shadow-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950">
+                            <CachedImage
+                              url={activeProof.back_image_url}
+                              alt={`${activeProof.title} - Back`}
+                              className="w-full max-h-[70vh] object-contain mx-auto select-none"
+                              style={{ maxHeight: zoomLevel <= 1 ? '70vh' : 'none' }}
+                              draggable={false}
+                            />
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 </motion.div>
@@ -1299,8 +1440,14 @@ export default function MyProofs() {
                 <div className="p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))] md:pb-5 space-y-4">
                   {/* Document Info */}
                   <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
-                    <div className="w-14 h-14 rounded-xl overflow-hidden border border-slate-200 shrink-0">
-                      <img src={detailsProof.image_url} alt="" className="w-full h-full object-cover" />
+                    <div className="w-14 h-14 rounded-xl border border-slate-200 shrink-0 flex items-center justify-center bg-slate-50 overflow-hidden">
+                      {detailsProof.image_url?.toLowerCase().endsWith('.pdf') || detailsProof.file_type === 'application/pdf' ? (
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-rose-500">
+                          <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" /><path d="M14 2v4a2 2 0 0 0 2 2h4" />
+                        </svg>
+                      ) : (
+                        <CachedImage url={detailsProof.image_url} alt="" className="w-full h-full object-cover" />
+                      )}
                     </div>
                     <div className="overflow-hidden">
                       <p className="font-bold text-slate-800 truncate">{detailsProof.title}</p>
@@ -1381,8 +1528,14 @@ export default function MyProofs() {
                 {/* Preview */}
                 <div className="px-5 pt-4">
                   <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100 mb-4">
-                    <div className="w-12 h-12 rounded-lg overflow-hidden border border-slate-200 shrink-0">
-                      <img src={editProof.image_url} alt="" className="w-full h-full object-cover" />
+                    <div className="w-12 h-12 rounded-lg border border-slate-200 shrink-0 flex items-center justify-center bg-slate-50 overflow-hidden">
+                      {editProof.image_url?.toLowerCase().endsWith('.pdf') || editProof.file_type === 'application/pdf' ? (
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-rose-500">
+                          <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" /><path d="M14 2v4a2 2 0 0 0 2 2h4" />
+                        </svg>
+                      ) : (
+                        <CachedImage url={editProof.image_url} alt="" className="w-full h-full object-cover" />
+                      )}
                     </div>
                     <div className="overflow-hidden">
                       <p className="font-bold text-sm text-slate-800 truncate">{editProof.title}</p>
@@ -1491,7 +1644,7 @@ export default function MyProofs() {
                 <div className="px-6 pb-4">
                   <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
                     <div className="w-12 h-12 rounded-lg overflow-hidden border border-slate-200 shrink-0">
-                      <img src={deleteTarget.image_url} alt="" className="w-full h-full object-cover" />
+                      <CachedImage url={deleteTarget.image_url} alt="" className="w-full h-full object-cover" />
                     </div>
                     <div className="overflow-hidden">
                       <p className="font-bold text-sm text-slate-800 truncate">{deleteTarget.title}</p>
@@ -1545,9 +1698,8 @@ export default function MyProofs() {
               exit={{ opacity: 0, scale: 0.8, x: '-50%', y: '-50%' }}
               className="fixed top-1/2 left-1/2 z-[99999] bg-white/80 dark:bg-[#12121f]/80 backdrop-blur-xl border border-slate-200/50 dark:border-slate-700/50 text-slate-800 dark:text-slate-100 px-6 py-4 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.2)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex flex-col items-center gap-3 text-center min-w-[200px] max-w-[80vw]"
             >
-              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${
-                toast.type === 'success' ? 'bg-emerald-500/10' : 'bg-red-500/10'
-              }`}>
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${toast.type === 'success' ? 'bg-emerald-500/10' : 'bg-red-500/10'
+                }`}>
                 {toast.type === 'success' ? (
                   <CheckCircle2 size={24} className="text-emerald-500" />
                 ) : (

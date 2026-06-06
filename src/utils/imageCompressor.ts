@@ -59,8 +59,8 @@ const iterativeCompress = async (
   maxDim: number
 ): Promise<Blob | null> => {
   let quality = startQuality;
-  let currentMaxW = maxDim;
-  let currentMaxH = maxDim;
+  const currentMaxW = maxDim;
+  const currentMaxH = maxDim;
   let blob: Blob | null = null;
 
   while (quality >= minQuality) {

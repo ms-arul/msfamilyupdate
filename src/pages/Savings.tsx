@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -52,6 +53,8 @@ const COLORS: Record<AssetType, string> = {
   Other: '#3B82F6'
 };
 
+
+
 interface FormState {
   asset_type: AssetType;
   category: string;
@@ -78,6 +81,9 @@ const EMPTY_FORM: FormState = {
 export default function Savings() {
   const { user } = useAuth();
   const { t } = useLanguage();
+
+  const containerVariants = staggerContainer(0.06, 0.08);
+  const itemVariants = staggerItem;
 
   const [assets, setAssets] = useState<SavingsAsset[]>([]);
   const [marketData, setMarketData] = useState<MetalRates | null>(null);
@@ -170,6 +176,7 @@ export default function Savings() {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('app:refresh', handleAppRefresh);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   // Check Daily Saving Status
@@ -424,14 +431,12 @@ export default function Savings() {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto custom-scrollbar relative bg-slate-50 dark:bg-[#0a0a14]">
-      {/* Dynamic Background */}
-      <div className="fixed inset-0 pointer-events-none z-0">
-        <div className="absolute top-0 right-0 w-[40vw] h-[40vw] bg-primary-500/10 blur-[100px] rounded-full mix-blend-screen" />
-        <div className="absolute bottom-0 left-0 w-[50vw] h-[50vw] bg-secondary-500/10 blur-[120px] rounded-full mix-blend-screen" />
-      </div>
-
-      <div className="relative z-10 px-3 py-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
+    <motion.div
+      variants={containerVariants}
+      initial="hidden"
+      animate="show"
+      className="space-y-4 sm:space-y-6 pb-8"
+    >
 
         {/* Top Control Bar: Consolidated Actions and Rates */}
         <div className="flex flex-col gap-4 pt-2">
@@ -498,7 +503,7 @@ export default function Savings() {
 
         {/* Source Status Card */}
         {marketData && (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="glass-panel p-4 rounded-2xl border border-primary-500/20 bg-gradient-to-r from-primary-500/10 to-transparent relative overflow-hidden">
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="g-panel p-4 bg-gradient-to-r from-primary-500/10 to-transparent relative overflow-hidden">
             <div className="flex items-start gap-4 relative z-10">
               <div className="p-3 bg-primary-500/20 rounded-xl shrink-0">
                 <Info size={24} className="text-primary-600 dark:text-primary-400" />
@@ -549,7 +554,7 @@ export default function Savings() {
             gradient={stats.profitLoss >= 0 ? 'bg-emerald-500' : 'bg-rose-500'}
             textColor={stats.profitLoss >= 0 ? 'text-emerald-500 dark:text-emerald-400' : 'text-rose-500 dark:text-rose-400'}
             icon={stats.profitLoss >= 0 ? TrendingUp : TrendingDown}
-            badge={`${stats.profitLoss >= 0 ? '+' : ''}${stats.profitPct.toFixed(2)}%`}
+            badge={stats.distribution.length > 0 ? `${stats.profitLoss >= 0 ? '+' : ''}${stats.profitPct.toFixed(2)}%` : undefined}
           />
         </div>
 
@@ -557,7 +562,7 @@ export default function Savings() {
         {assets.length > 0 && (
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
             {/* Pie Chart */}
-            <div className="glass-panel p-3 sm:p-5 rounded-2xl lg:col-span-1 flex flex-col items-center justify-center overflow-hidden">
+            <div className="g-panel p-3 sm:p-5 flex flex-col items-center justify-center overflow-hidden">
               <h3 className="text-slate-900 dark:text-white font-bold w-full text-left text-xs sm:text-base mb-2 truncate">{t('Asset Distribution')}</h3>
               <div className="h-[140px] sm:h-[200px] w-full relative">
                 <SafeChartContainer width="100%" height="100%" minWidth={100} minHeight={140} data={stats.distribution}>
@@ -582,7 +587,7 @@ export default function Savings() {
             </div>
 
             {/* Growth Graph */}
-            <div className="glass-panel p-3 sm:p-5 rounded-2xl lg:col-span-2 overflow-hidden">
+            <div className="g-panel p-3 sm:p-5 lg:col-span-2 overflow-hidden">
               <h3 className="text-slate-900 dark:text-white font-bold text-xs sm:text-base mb-2 sm:mb-4 truncate">{t('Investment Growth')}</h3>
               <div className="h-[140px] sm:h-[200px] w-full relative">
                 <SafeChartContainer width="100%" height="100%" minWidth={100} minHeight={140} data={growthData}>
@@ -609,10 +614,10 @@ export default function Savings() {
         )}
 
         {/* ── Daily Savings Widget ── */}
-        <div className="glass-panel p-5 sm:p-6 rounded-3xl border-2 border-primary-500/20 bg-gradient-to-br from-primary-500/10 via-transparent to-transparent relative overflow-hidden mb-6 group">
+        <div className="g-panel p-5 sm:p-6 border-2 border-primary-500/20 bg-gradient-to-br from-primary-500/10 via-transparent to-transparent relative overflow-hidden mb-6 group dark:bg-transparent dark:border-slate-800">
           
           {/* Decorative background circle */}
-          <div className="absolute -top-24 -right-24 w-48 h-48 bg-primary-500/20 rounded-full blur-3xl opacity-50 group-hover:opacity-100 transition-opacity duration-500"></div>
+          <div className="absolute -top-24 -right-24 w-48 h-48 bg-primary-500/20 rounded-full blur-3xl opacity-50 group-hover:opacity-100 transition-opacity duration-500 dark:hidden"></div>
 
           <div className="flex flex-col sm:flex-row items-center sm:items-start justify-between gap-6 relative z-10">
             {/* Left/Top Content */}
@@ -704,7 +709,7 @@ export default function Savings() {
         </div>
 
         {/* DataTable */}
-        <div className="glass-panel rounded-2xl overflow-hidden mb-8">
+        <div className="g-panel overflow-hidden mb-8">
           <div className="overflow-x-auto sm:overflow-visible custom-scrollbar">
             <table className="w-full text-left border-collapse">
               <thead>
@@ -786,374 +791,382 @@ export default function Savings() {
         </div>
 
       {/* ── Add/Edit Modal ── */}
-      <AnimatePresence>
-        {showModal && (
-          <motion.div
-            variants={modalBackdropVariants}
-            initial="hidden"
-            animate="visible"
-            exit="exit"
-            className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-6"
-            onClick={() => setShowModal(false)}
-          >
-            <motion.div
-              variants={modalContentVariants}
-              initial="hidden"
-              animate="visible"
-              exit="exit"
-              transition={modalTransition}
-              onClick={e => e.stopPropagation()}
-              className="w-full max-w-lg bg-white dark:bg-[#12121f] rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden max-h-[90vh]"
-            >
-              {/* Header */}
-              <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-slate-800">
-                <h2 className="text-lg font-bold text-slate-900 dark:text-white">
-                  {editingId ? t('Edit Investment') : t('New Investment')}
-                </h2>
-                <button onClick={() => setShowModal(false)} className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500">
-                  <X size={18} />
-                </button>
-              </div>
-
-              {/* Form */}
-              <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-5 space-y-4">
-
-                {/* Type & Category */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wider">{t('Asset Type')}</label>
-                    <select
-                      value={formData.asset_type}
-                      onChange={e => setFormData(p => ({ ...p, asset_type: e.target.value as AssetType, category: CATEGORIES[e.target.value as AssetType][0] }))}
-                      className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1a1a2e] text-slate-900 dark:text-white font-semibold focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
-                    >
-                      {ASSET_TYPES.map(t_str => <option key={t_str} value={t_str}>{t(t_str)}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wider">{t('Category')}</label>
-                    <select
-                      value={formData.category}
-                      onChange={e => setFormData(p => ({ ...p, category: e.target.value }))}
-                      className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1a1a2e] text-slate-900 dark:text-white font-semibold focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
-                    >
-                      {CATEGORIES[formData.asset_type].map(c => <option key={c} value={c}>{t(c)}</option>)}
-                    </select>
-                  </div>
-                </div>
-
-                {/* Quantity & Price */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wider">{t('Quantity')} ({formData.asset_type === 'Other' ? t('Units') : 'g'})</label>
-                    <input
-                      type="number" step="0.01" min="0" required
-                      value={formData.quantity}
-                      onChange={e => setFormData(p => ({ ...p, quantity: e.target.value }))}
-                      placeholder="e.g. 10.5"
-                      className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1a1a2e] text-slate-900 dark:text-white font-semibold"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wider">{t('Total Cost (₹)')}</label>
-                    <input
-                      type="number" min="0" required
-                      value={formData.purchase_price}
-                      onChange={e => setFormData(p => ({ ...p, purchase_price: e.target.value }))}
-                      placeholder="e.g. 75000"
-                      className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1a1a2e] text-slate-900 dark:text-white font-semibold"
-                    />
-                  </div>
-                </div>
-
-                {/* Live Estimator Note */}
-                {formData.quantity && marketData && formData.asset_type !== 'Other' && (
-                  <div className="p-3 bg-primary-50 dark:bg-primary-500/10 rounded-xl border border-primary-100 dark:border-primary-500/20 text-xs text-primary-700 dark:text-primary-300">
-                    <span className="font-bold">{t('Live API Value: ')}</span>
-                    ₹{(Number(formData.quantity) * (
-                      formData.asset_type === 'Silver' ? marketData.silver :
-                        formData.category.includes('24K') ? marketData.gold24 : marketData.gold22
-                    )).toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                  </div>
-                )}
-
-                {/* Date */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wider">{t('Purchase Date')}</label>
-                  <input
-                    type="date" required
-                    value={formData.purchase_date}
-                    onChange={e => setFormData(p => ({ ...p, purchase_date: e.target.value }))}
-                    className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1a1a2e] text-slate-900 dark:text-white font-semibold"
-                  />
-                </div>
-
-                {/* Bill / Proof */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wider">{t('Bill / Proof (Optional)')}</label>
-                  {formData.image_uri ? (
-                    <div className="relative group rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 shadow-sm w-32 h-20 mx-auto">
-                      <img
-                        src={formData.image_uri}
-                        alt="Proof"
-                        className="w-full h-full object-cover"
-                      />
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setFormData(p => ({ ...p, image_uri: null }))}
-                          className="p-2 rounded-xl bg-rose-500 text-white shadow-lg hover:bg-rose-600 transition-colors"
-                          title={t('Remove Image')}
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                      </div>
-                      <div className="absolute top-2 left-2 bg-emerald-500 text-white p-1 rounded-lg">
-                        <CheckCircle2 size={12} />
-                      </div>
-                    </div>
-                  ) : (
-                    <label className="flex items-center justify-center w-full p-4 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-white/5 transition-colors cursor-pointer group">
-                      <input type="file" accept="image/*" capture="environment" className="hidden"
-                        onClick={() => {
-                          if (typeof shouldSuppressLock === 'function') shouldSuppressLock();
-                        }}
-                        onChange={handleImageUpload}
-                      />
-                      <div className="flex items-center gap-2 text-slate-500 group-hover:text-primary-500 transition-colors">
-                        <ImageIcon size={20} /> {t('Tap to Capture / Upload')}
-                      </div>
-                    </label>
-                  )}
-                </div>
-
-                {/* Notes */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Notes</label>
-                  <textarea
-                    value={formData.notes}
-                    onChange={e => setFormData(p => ({ ...p, notes: e.target.value }))}
-                    placeholder={t('Bought from GRT Jewellers')}
-                    className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#1a1a2e] text-slate-900 dark:text-white text-sm"
-                    rows={2}
-                  />
-                </div>
-
-                {/* Footer Buttons */}
-                <div className="pt-4 flex gap-3">
-                  <button type="button" onClick={() => setShowModal(false)} className="flex-1 p-3 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-bold hover:bg-slate-50 dark:hover:bg-white/5">
-                    {t('Cancel')}
-                  </button>
-                  <button type="submit" disabled={isSubmitting} className="flex-1 btn-primary p-3 rounded-xl font-bold flex items-center justify-center">
-                    {isSubmitting ? <RefreshCw size={20} className="animate-spin" /> : t('Save Investment')}
-                  </button>
-                </div>
-
-              </form>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ── Asset Info Modal ── */}
-      <AnimatePresence>
-        {selectedAssetForInfo && (
-          <motion.div
-            variants={modalBackdropVariants}
-            initial="hidden"
-            animate="visible"
-            exit="exit"
-            className="fixed inset-0 z-[110] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-6"
-            onClick={() => setSelectedAssetForInfo(null)}
-          >
-            <motion.div
-              variants={modalContentVariants}
-              initial="hidden"
-              animate="visible"
-              exit="exit"
-              transition={modalTransition}
-              className="w-full max-w-md bg-white dark:bg-[#12121f] rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden max-h-[70vh] flex flex-col"
-            >
-              <div className="p-5 border-b border-slate-100 dark:border-white/5 flex items-center justify-between shrink-0">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${COLORS[selectedAssetForInfo.asset_type as AssetType]}20`, color: COLORS[selectedAssetForInfo.asset_type as AssetType] }}>
-                    {selectedAssetForInfo.asset_type === 'Gold' ? <Activity size={20} /> : selectedAssetForInfo.asset_type === 'Silver' ? <Wallet size={20} /> : <TrendingUp size={20} />}
-                  </div>
-                  <div>
-                    <h2 className="text-lg font-bold text-slate-900 dark:text-white leading-tight">{t(selectedAssetForInfo.category)}</h2>
-                    <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">{t(selectedAssetForInfo.asset_type)}</p>
-                  </div>
-                </div>
-                <button onClick={() => setSelectedAssetForInfo(null)} className="p-2 rounded-xl bg-slate-100 dark:bg-white/10 text-slate-500">
-                  <X size={20} />
-                </button>
-              </div>
-
-              <div className="p-6 space-y-6 overflow-y-auto custom-scrollbar flex-1" style={{ WebkitOverflowScrolling: 'touch' }}>
-                {/* Main Metrics Grid */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-slate-50 dark:bg-white/[0.03] p-4 rounded-2xl border border-slate-100 dark:border-white/5">
-                    <p className="text-[10px] uppercase font-bold text-slate-400 mb-1">{t('Quantity')}</p>
-                    <p className="text-base font-black text-slate-900 dark:text-white">{selectedAssetForInfo.quantity} {selectedAssetForInfo.asset_type !== 'Other' ? 'g' : t('Units')}</p>
-                  </div>
-                  <div className="bg-slate-50 dark:bg-white/[0.03] p-4 rounded-2xl border border-slate-100 dark:border-white/5">
-                    <p className="text-[10px] uppercase font-bold text-slate-400 mb-1">{t('Cost Price')}</p>
-                    <p className="text-base font-black text-slate-900 dark:text-white">₹{Number(selectedAssetForInfo.purchase_price).toLocaleString()}</p>
-                  </div>
-                </div>
-
-                {/* Performance Highlight */}
-                {(() => {
-                  const metrics = marketData ? calculateAssetMetrics(selectedAssetForInfo, marketData) : { currentValue: selectedAssetForInfo.purchase_price, profitLoss: 0, profitPercentage: 0 };
-                  const isProfit = metrics.profitLoss >= 0;
-
-                  return (
-                    <div className={`p-4 rounded-2xl border ${isProfit ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-rose-500/5 border-rose-500/20'}`}>
-                      <div className="flex items-center justify-between mb-4">
-                        <div>
-                          <p className="text-[10px] uppercase font-bold text-slate-400 mb-0.5">{t('Current Value')}</p>
-                          <p className="text-2xl font-black text-slate-900 dark:text-white">₹{metrics.currentValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
-                        </div>
-                        <div className={`p-3 rounded-xl ${isProfit ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'}`}>
-                          {isProfit ? <TrendingUp size={24} /> : <TrendingDown size={24} />}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between pt-4 border-t border-slate-200/50 dark:border-white/5">
-                        <div>
-                          <p className="text-[10px] uppercase font-bold text-slate-400 mb-0.5">{t('Profit / Loss')}</p>
-                          <p className={`text-base font-black ${isProfit ? 'text-emerald-500' : 'text-rose-500'}`}>
-                            {isProfit ? '+' : '-'}₹{Math.abs(metrics.profitLoss).toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-[10px] uppercase font-bold text-slate-400 mb-0.5">{t('Growth')}</p>
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-black ${isProfit ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'}`}>
-                            {isProfit ? '+' : ''}{metrics.profitPercentage.toFixed(2)}%
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                {/* Details */}
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-slate-500 font-bold">{t('Purchase Date')}</span>
-                    <span className="text-slate-900 dark:text-white font-bold">{new Date(selectedAssetForInfo.purchase_date).toLocaleDateString(undefined, { dateStyle: 'long' })}</span>
-                  </div>
-
-                  {selectedAssetForInfo.image_uri && (
-                    <div className="pt-4 border-t border-slate-100 dark:border-white/5">
-                      <p className="text-[10px] uppercase font-bold text-slate-400 mb-2 text-center">{t('Attached Proof')}</p>
-                      <div className="rounded-2xl overflow-hidden border border-slate-200 dark:border-white/10 shadow-sm w-40 h-24 mx-auto group relative">
-                        <img
-                          src={selectedAssetForInfo.image_uri}
-                          alt="Proof"
-                          className="w-full h-full object-cover cursor-pointer hover:scale-110 transition-transform"
-                          onClick={() => setViewingFullImage(selectedAssetForInfo.image_uri)}
-                        />
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (selectedAssetForInfo.image_uri) {
-                                handleDownloadProof(selectedAssetForInfo.image_uri);
-                              }
-                            }}
-                            className="p-2 bg-white/20 hover:bg-primary-500 text-white rounded-full backdrop-blur-sm transition-all"
-                            title={t('Download')}
-                          >
-                            <Download size={16} />
-                          </button>
-                          <button
-                            onClick={() => setViewingFullImage(selectedAssetForInfo.image_uri)}
-                            className="p-2 bg-white/20 hover:bg-primary-500 text-white rounded-full backdrop-blur-sm transition-all"
-                            title={t('View Full')}
-                          >
-                            <Eye size={16} />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {selectedAssetForInfo.notes && (
-                    <div className="pt-4 border-t border-slate-100 dark:border-white/5">
-                      <p className="text-[10px] uppercase font-bold text-slate-400 mb-2">{t('Personal Notes')}</p>
-                      <p className="text-sm text-slate-600 dark:text-slate-400 italic bg-slate-50 dark:bg-white/[0.02] p-3 rounded-xl border border-slate-100 dark:border-white/5">
-                        "{selectedAssetForInfo.notes}"
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                <button
-                  onClick={() => setSelectedAssetForInfo(null)}
-                  className="w-full py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-black rounded-2xl shadow-xl active:scale-[0.98] transition-transform"
-                >
-                  {t('Close Details')}
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-        {/* ── Full Screen Image Viewer ── */}
+      {createPortal(
         <AnimatePresence>
-          {viewingFullImage && (
+          {showModal && (
             <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[300] bg-black/95 backdrop-blur-xl flex flex-col items-center justify-center p-4 md:p-12"
-              onClick={() => setViewingFullImage(null)}
+              variants={modalBackdropVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-6"
+              onClick={() => setShowModal(false)}
             >
               <motion.div
-                initial={{ scale: 0.9, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.9, opacity: 0 }}
-                className="relative w-full max-w-4xl max-h-full flex items-center justify-center"
+                variants={modalContentVariants}
+                initial="hidden"
+                animate="visible"
+                exit="exit"
+                transition={modalTransition}
                 onClick={e => e.stopPropagation()}
+                className="g-modal w-full max-w-lg rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden max-h-[90vh]"
               >
-                <img
-                  src={viewingFullImage}
-                  className="max-w-full max-h-[85vh] object-contain rounded-2xl shadow-2xl"
-                  alt="Full Preview"
-                />
-                <div className="absolute -top-12 right-0 md:-right-12 flex gap-3">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (viewingFullImage) {
-                        handleDownloadProof(viewingFullImage);
-                      }
-                    }}
-                    className="p-3 bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors backdrop-blur-md"
-                    title={t('Download')}
-                  >
-                    <Download size={24} />
+                {/* Header */}
+                <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-slate-800">
+                  <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+                    {editingId ? t('Edit Investment') : t('New Investment')}
+                  </h2>
+                  <button onClick={() => setShowModal(false)} className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500">
+                    <X size={18} />
                   </button>
+                </div>
+
+                {/* Form */}
+                <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-5 space-y-4">
+
+                  {/* Type & Category */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wider">{t('Asset Type')}</label>
+                      <select
+                        value={formData.asset_type}
+                        onChange={e => setFormData(p => ({ ...p, asset_type: e.target.value as AssetType, category: CATEGORIES[e.target.value as AssetType][0] }))}
+                        className="g-input w-full p-3 text-slate-900 dark:text-white font-semibold"
+                      >
+                        {ASSET_TYPES.map(t_str => <option key={t_str} value={t_str}>{t(t_str)}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wider">{t('Category')}</label>
+                      <select
+                        value={formData.category}
+                        onChange={e => setFormData(p => ({ ...p, category: e.target.value }))}
+                        className="g-input w-full p-3 text-slate-900 dark:text-white font-semibold"
+                      >
+                        {CATEGORIES[formData.asset_type].map(c => <option key={c} value={c}>{t(c)}</option>)}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Quantity & Price */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wider">{t('Quantity')} ({formData.asset_type === 'Other' ? t('Units') : 'g'})</label>
+                      <input
+                        type="number" step="0.01" min="0" required
+                        value={formData.quantity}
+                        onChange={e => setFormData(p => ({ ...p, quantity: e.target.value }))}
+                        placeholder="e.g. 10.5"
+                        className="g-input w-full p-3 text-slate-900 dark:text-white font-semibold"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wider">{t('Total Cost (₹)')}</label>
+                      <input
+                        type="number" min="0" required
+                        value={formData.purchase_price}
+                        onChange={e => setFormData(p => ({ ...p, purchase_price: e.target.value }))}
+                        placeholder="e.g. 75000"
+                        className="g-input w-full p-3 text-slate-900 dark:text-white font-semibold"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Live Estimator Note */}
+                  {formData.quantity && marketData && formData.asset_type !== 'Other' && (
+                    <div className="p-3 bg-primary-50 dark:bg-primary-500/10 rounded-xl border border-primary-100 dark:border-primary-500/20 text-xs text-primary-700 dark:text-primary-300">
+                      <span className="font-bold">{t('Live API Value: ')}</span>
+                      ₹{(Number(formData.quantity) * (
+                        formData.asset_type === 'Silver' ? marketData.silver :
+                          formData.category.includes('24K') ? marketData.gold24 : marketData.gold22
+                      )).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                    </div>
+                  )}
+
+                  {/* Date */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wider">{t('Purchase Date')}</label>
+                    <input
+                      type="date" required
+                      value={formData.purchase_date}
+                      onChange={e => setFormData(p => ({ ...p, purchase_date: e.target.value }))}
+                      className="g-input w-full p-3 text-slate-900 dark:text-white font-semibold"
+                    />
+                  </div>
+
+                  {/* Bill / Proof */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wider">{t('Bill / Proof (Optional)')}</label>
+                    {formData.image_uri ? (
+                      <div className="relative group rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 shadow-sm w-32 h-20 mx-auto">
+                        <img
+                          src={formData.image_uri}
+                          alt="Proof"
+                          className="w-full h-full object-cover"
+                        />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setFormData(p => ({ ...p, image_uri: null }))}
+                            className="p-2 rounded-xl bg-rose-500 text-white shadow-lg hover:bg-rose-600 transition-colors"
+                            title={t('Remove Image')}
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        </div>
+                        <div className="absolute top-2 left-2 bg-emerald-500 text-white p-1 rounded-lg">
+                          <CheckCircle2 size={12} />
+                        </div>
+                      </div>
+                    ) : (
+                      <label className="flex items-center justify-center w-full p-4 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-white/5 transition-colors cursor-pointer group">
+                        <input type="file" accept="image/*" capture="environment" className="hidden"
+                          onClick={() => {
+                            if (typeof shouldSuppressLock === 'function') shouldSuppressLock();
+                          }}
+                          onChange={handleImageUpload}
+                        />
+                        <div className="flex items-center gap-2 text-slate-500 group-hover:text-primary-500 transition-colors">
+                          <ImageIcon size={20} /> {t('Tap to Capture / Upload')}
+                        </div>
+                      </label>
+                    )}
+                  </div>
+
+                  {/* Notes */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Notes</label>
+                    <textarea
+                      value={formData.notes}
+                      onChange={e => setFormData(p => ({ ...p, notes: e.target.value }))}
+                      placeholder={t('Bought from GRT Jewellers')}
+                      className="g-input w-full p-3 text-slate-900 dark:text-white text-sm"
+                      rows={2}
+                    />
+                  </div>
+
+                  {/* Footer Buttons */}
+                  <div className="pt-4 flex gap-3">
+                    <button type="button" onClick={() => setShowModal(false)} className="flex-1 p-3 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-bold hover:bg-slate-50 dark:hover:bg-white/5">
+                      {t('Cancel')}
+                    </button>
+                    <button type="submit" disabled={isSubmitting} className="flex-1 btn-primary p-3 rounded-xl font-bold flex items-center justify-center">
+                      {isSubmitting ? <RefreshCw size={20} className="animate-spin" /> : t('Save Investment')}
+                    </button>
+                  </div>
+
+                </form>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
+
+      {/* ── Asset Info Modal ── */}
+      {createPortal(
+        <AnimatePresence>
+          {selectedAssetForInfo && (
+            <motion.div
+              variants={modalBackdropVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              className="fixed inset-0 z-[110] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-6"
+              onClick={() => setSelectedAssetForInfo(null)}
+            >
+              <motion.div
+                variants={modalContentVariants}
+                initial="hidden"
+                animate="visible"
+                exit="exit"
+                transition={modalTransition}
+                className="g-modal w-full max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden max-h-[70vh] flex flex-col"
+              >
+                <div className="p-5 border-b border-slate-100 dark:border-white/5 flex items-center justify-between shrink-0">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${COLORS[selectedAssetForInfo.asset_type as AssetType]}20`, color: COLORS[selectedAssetForInfo.asset_type as AssetType] }}>
+                      {selectedAssetForInfo.asset_type === 'Gold' ? <Activity size={20} /> : selectedAssetForInfo.asset_type === 'Silver' ? <Wallet size={20} /> : <TrendingUp size={20} />}
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-bold text-slate-900 dark:text-white leading-tight">{t(selectedAssetForInfo.category)}</h2>
+                      <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">{t(selectedAssetForInfo.asset_type)}</p>
+                    </div>
+                  </div>
+                  <button onClick={() => setSelectedAssetForInfo(null)} className="p-2 rounded-xl bg-slate-100 dark:bg-white/10 text-slate-500">
+                    <X size={20} />
+                  </button>
+                </div>
+
+                <div className="p-6 space-y-6 overflow-y-auto custom-scrollbar flex-1" style={{ WebkitOverflowScrolling: 'touch' }}>
+                  {/* Main Metrics Grid */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-slate-50 dark:bg-white/[0.03] p-4 rounded-2xl border border-slate-100 dark:border-white/5">
+                      <p className="text-[10px] uppercase font-bold text-slate-400 mb-1">{t('Quantity')}</p>
+                      <p className="text-base font-black text-slate-900 dark:text-white">{selectedAssetForInfo.quantity} {selectedAssetForInfo.asset_type !== 'Other' ? 'g' : t('Units')}</p>
+                    </div>
+                    <div className="bg-slate-50 dark:bg-white/[0.03] p-4 rounded-2xl border border-slate-100 dark:border-white/5">
+                      <p className="text-[10px] uppercase font-bold text-slate-400 mb-1">{t('Cost Price')}</p>
+                      <p className="text-base font-black text-slate-900 dark:text-white">₹{Number(selectedAssetForInfo.purchase_price).toLocaleString()}</p>
+                    </div>
+                  </div>
+
+                  {/* Performance Highlight */}
+                  {(() => {
+                    const metrics = marketData ? calculateAssetMetrics(selectedAssetForInfo, marketData) : { currentValue: selectedAssetForInfo.purchase_price, profitLoss: 0, profitPercentage: 0 };
+                    const isProfit = metrics.profitLoss >= 0;
+
+                    return (
+                      <div className={`p-4 rounded-2xl border ${isProfit ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-rose-500/5 border-rose-500/20'}`}>
+                        <div className="flex items-center justify-between mb-4">
+                          <div>
+                            <p className="text-[10px] uppercase font-bold text-slate-400 mb-0.5">{t('Current Value')}</p>
+                            <p className="text-2xl font-black text-slate-900 dark:text-white">₹{metrics.currentValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+                          </div>
+                          <div className={`p-3 rounded-xl ${isProfit ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'}`}>
+                            {isProfit ? <TrendingUp size={24} /> : <TrendingDown size={24} />}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between pt-4 border-t border-slate-200/50 dark:border-white/5">
+                          <div>
+                            <p className="text-[10px] uppercase font-bold text-slate-400 mb-0.5">{t('Profit / Loss')}</p>
+                            <p className={`text-base font-black ${isProfit ? 'text-emerald-500' : 'text-rose-500'}`}>
+                              {isProfit ? '+' : '-'}₹{Math.abs(metrics.profitLoss).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-[10px] uppercase font-bold text-slate-400 mb-0.5">{t('Growth')}</p>
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-black ${isProfit ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'}`}>
+                              {isProfit ? '+' : ''}{metrics.profitPercentage.toFixed(2)}%
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Details */}
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-slate-500 font-bold">{t('Purchase Date')}</span>
+                      <span className="text-slate-900 dark:text-white font-bold">{new Date(selectedAssetForInfo.purchase_date).toLocaleDateString(undefined, { dateStyle: 'long' })}</span>
+                    </div>
+
+                    {selectedAssetForInfo.image_uri && (
+                      <div className="pt-4 border-t border-slate-100 dark:border-white/5">
+                        <p className="text-[10px] uppercase font-bold text-slate-400 mb-2 text-center">{t('Attached Proof')}</p>
+                        <div className="rounded-2xl overflow-hidden border border-slate-200 dark:border-white/10 shadow-sm w-40 h-24 mx-auto group relative">
+                          <img
+                            src={selectedAssetForInfo.image_uri}
+                            alt="Proof"
+                            className="w-full h-full object-cover cursor-pointer hover:scale-110 transition-transform"
+                            onClick={() => setViewingFullImage(selectedAssetForInfo.image_uri)}
+                          />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (selectedAssetForInfo.image_uri) {
+                                  handleDownloadProof(selectedAssetForInfo.image_uri);
+                                }
+                              }}
+                              className="p-2 bg-white/20 hover:bg-primary-500 text-white rounded-full backdrop-blur-sm transition-all"
+                              title={t('Download')}
+                            >
+                              <Download size={16} />
+                            </button>
+                            <button
+                              onClick={() => setViewingFullImage(selectedAssetForInfo.image_uri)}
+                              className="p-2 bg-white/20 hover:bg-primary-500 text-white rounded-full backdrop-blur-sm transition-all"
+                              title={t('View Full')}
+                            >
+                              <Eye size={16} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {selectedAssetForInfo.notes && (
+                      <div className="pt-4 border-t border-slate-100 dark:border-white/5">
+                        <p className="text-[10px] uppercase font-bold text-slate-400 mb-2">{t('Personal Notes')}</p>
+                        <p className="text-sm text-slate-600 dark:text-slate-400 italic bg-slate-50 dark:bg-white/[0.02] p-3 rounded-xl border border-slate-100 dark:border-white/5">
+                          "{selectedAssetForInfo.notes}"
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
                   <button
-                    onClick={() => setViewingFullImage(null)}
-                    className="p-3 bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors backdrop-blur-md"
-                    title={t('Close')}
+                    onClick={() => setSelectedAssetForInfo(null)}
+                    className="w-full py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-black rounded-2xl shadow-xl active:scale-[0.98] transition-transform"
                   >
-                    <X size={24} />
+                    {t('Close Details')}
                   </button>
                 </div>
               </motion.div>
-              <p className="mt-6 text-white/60 font-medium text-sm">{t('Tap anywhere to close')}</p>
             </motion.div>
           )}
-        </AnimatePresence>
+        </AnimatePresence>,
+        document.body
+      )}
+
+        {/* ── Full Screen Image Viewer ── */}
+        {createPortal(
+          <AnimatePresence>
+            {viewingFullImage && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 z-[300] bg-black/95 backdrop-blur-xl flex flex-col items-center justify-center p-4 md:p-12"
+                onClick={() => setViewingFullImage(null)}
+              >
+                <motion.div
+                  initial={{ scale: 0.9, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.9, opacity: 0 }}
+                  className="relative w-full max-w-4xl max-h-full flex items-center justify-center"
+                  onClick={e => e.stopPropagation()}
+                >
+                  <img
+                    src={viewingFullImage}
+                    className="max-w-full max-h-[85vh] object-contain rounded-2xl shadow-2xl"
+                    alt="Full Preview"
+                  />
+                  <div className="absolute -top-12 right-0 md:-right-12 flex gap-3">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (viewingFullImage) {
+                          handleDownloadProof(viewingFullImage);
+                        }
+                      }}
+                      className="p-3 bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors backdrop-blur-md"
+                      title={t('Download')}
+                    >
+                      <Download size={24} />
+                    </button>
+                    <button
+                      onClick={() => setViewingFullImage(null)}
+                      className="p-3 bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors backdrop-blur-md"
+                      title={t('Close')}
+                    >
+                      <X size={24} />
+                    </button>
+                  </div>
+                </motion.div>
+                <p className="mt-6 text-white/60 font-medium text-sm">{t('Tap anywhere to close')}</p>
+              </motion.div>
+            )}
+          </AnimatePresence>,
+          document.body
+        )}
 
         {/* Toast Notification */}
         <Toast message={toast.message} visible={toast.visible} icon={toast.icon} />
-      </div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -1198,13 +1211,14 @@ interface StatCardProps {
 const StatCard: React.FC<StatCardProps> = ({ title, amount, gradient, textColor, icon: Icon, prefix = '₹', badge }) => (
   <motion.div
     whileTap={{ scale: 0.97 }}
-    className="glass-panel relative overflow-hidden flex flex-col justify-between cursor-default"
+    className="g-stat relative overflow-hidden flex flex-col justify-between cursor-default"
   >
-    <div className={`absolute -right-6 -top-6 w-16 h-16 sm:w-24 sm:h-24 rounded-full blur-2xl opacity-25 ${gradient}`} />
+    {/* Ambient color glow */}
+    <div className={`absolute -right-5 -top-5 w-20 h-20 rounded-full blur-2xl opacity-20 ${gradient} dark:hidden`} />
 
     <div className="p-2.5 sm:p-5 flex flex-col gap-2 sm:gap-3 relative z-10 h-full">
       <div className="flex items-center justify-between">
-        <div className={`p-1.5 sm:p-2.5 rounded-lg sm:rounded-xl ${gradient} bg-opacity-20`}>
+        <div className={`g-icon-bubble w-8 h-8 sm:w-9 sm:h-9 rounded-[11px] flex items-center justify-center ${gradient} bg-opacity-20`}>
           <Icon className={`w-4 h-4 sm:w-[18px] sm:h-[18px] ${textColor || 'text-slate-700 dark:text-white'}`} />
         </div>
         {badge && (
@@ -1220,6 +1234,9 @@ const StatCard: React.FC<StatCardProps> = ({ title, amount, gradient, textColor,
         </h3>
       </div>
     </div>
+
+    {/* Shimmer sweep */}
+    <div className="absolute inset-0 -translate-x-full hover:translate-x-full transition-transform duration-[1200ms] bg-gradient-to-r from-transparent via-white/[0.06] to-transparent pointer-events-none" />
   </motion.div>
 );
 
@@ -1237,9 +1254,9 @@ const RateBadge: React.FC<RateBadgeProps> = ({ label, value, unit, color }) => {
   };
 
   return (
-    <div className={`px-3 py-2 rounded-xl border flex flex-col ${colorMap[color]}`}>
-      <span className="text-[10px] uppercase font-bold tracking-wider opacity-80">{label}</span>
-      <span className="font-bold">₹{value ? value.toLocaleString() : '---'} <span className="text-xs font-normal">/ {unit}</span></span>
+    <div className={`px-3 py-2 rounded-xl border flex flex-col shadow-sm backdrop-blur-md ${colorMap[color]}`}>
+      <span className="text-[10px] uppercase font-bold tracking-wider opacity-85">{label}</span>
+      <span className="font-bold">₹{value ? value.toLocaleString() : '---'} <span className="text-xs font-normal opacity-70">/ {unit}</span></span>
     </div>
   );
 };

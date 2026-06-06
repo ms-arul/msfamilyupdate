@@ -16,7 +16,7 @@ export interface SmsPermissionStatus {
 export interface SmsReaderPlugin {
   checkPermission(): Promise<SmsPermissionStatus>;
   requestPermission(): Promise<{ granted: boolean; openedSettings?: boolean }>;
-  setConfig(options: { url: string; key: string; token: string; userId: string }): Promise<void>;
+  setConfig(options: { url: string; key: string; token: string; userId: string; refreshToken?: string }): Promise<void>;
   getAndClearPendingSms(): Promise<{ messages: SmsMessage[] }>;
   startListening(): Promise<void>;
   stopListening(): Promise<void>;

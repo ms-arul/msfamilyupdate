@@ -221,7 +221,7 @@ export default function FamilyOverview() {
         const [txRes, profileRes] = await Promise.all([
           supabase
             .from('transactions')
-            .select(`*, profiles:member_id ( name )`)
+            .select(`*, profiles:profiles!transactions_member_id_fkey ( name )`)
             .order('date', { ascending: false }),
           supabase
             .from('profiles')
@@ -408,8 +408,8 @@ export default function FamilyOverview() {
         variants={item}
         className="glass-panel p-6 sm:p-8 relative overflow-hidden"
       >
-        <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-bl from-primary-500/20 to-transparent rounded-full blur-3xl -mr-32 -mt-32 pointer-events-none" />
-        <div className="absolute bottom-0 left-0 w-64 h-64 bg-gradient-to-tr from-secondary-500/20 to-transparent rounded-full blur-3xl -ml-32 -mb-32 pointer-events-none" />
+        <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-bl from-primary-500/20 to-transparent rounded-full blur-3xl -mr-32 -mt-32 pointer-events-none dark:hidden" />
+        <div className="absolute bottom-0 left-0 w-64 h-64 bg-gradient-to-tr from-secondary-500/20 to-transparent rounded-full blur-3xl -ml-32 -mb-32 pointer-events-none dark:hidden" />
 
         <div className="relative z-10">
           <div className="flex items-center justify-between mb-2">

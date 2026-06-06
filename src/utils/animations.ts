@@ -39,15 +39,15 @@ export const DURATIONS = {
 // ─── Spring Presets ───────────────────────────────────────────────────────────
 export const SPRINGS = {
   /** Snappy UI spring — buttons, pills, toggles */
-  snappy: { type: 'spring' as const, stiffness: 500, damping: 30 },
+  snappy: { type: 'spring' as const, stiffness: 450, damping: 34 },
   /** Standard spring — cards, panels */
-  default: { type: 'spring' as const, stiffness: 400, damping: 30 },
+  default: { type: 'spring' as const, stiffness: 350, damping: 34 },
   /** Bouncy spring — modals, popovers */
-  bouncy: { type: 'spring' as const, stiffness: 420, damping: 28 },
+  bouncy: { type: 'spring' as const, stiffness: 360, damping: 32 },
   /** Gentle spring — page transitions */
-  gentle: { type: 'spring' as const, stiffness: 340, damping: 32 },
+  gentle: { type: 'spring' as const, stiffness: 280, damping: 36 },
   /** Nav indicator */
-  nav: { type: 'spring' as const, stiffness: 380, damping: 30 },
+  nav: { type: 'spring' as const, stiffness: 320, damping: 34 },
 } as const;
 
 // ─── Reduced Motion Helper ───────────────────────────────────────────────────
@@ -167,7 +167,12 @@ export const modalContentVariants: Variants = {
   },
 };
 
-export const modalTransition: Transition = SPRINGS.bouncy;
+export const modalTransition: Transition = {
+  opacity: { ...SPRINGS.bouncy },
+  scale: { ...SPRINGS.bouncy },
+  y: { ...SPRINGS.bouncy },
+  filter: { type: 'tween', ease: 'easeOut', duration: 0.2 }
+};
 
 // ─── Sidebar / Slide Panel ────────────────────────────────────────────────────
 export const slideFromLeft: Variants = {

@@ -28,6 +28,8 @@ export interface Proof {
   ai_summary: string | null;
   is_pinned: boolean;
   created_at: string;
+  file_type?: string | null;
+  file_size?: number | null;
 }
 
 export interface DbNotification {

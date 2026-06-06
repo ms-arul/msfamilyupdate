@@ -34,6 +34,8 @@ import { startSmsListener, stopSmsListener, requestSmsPermission, checkSmsPermis
 
 import ShareActionSheet from './components/ShareActionSheet';
 import MaintenanceGuard from './components/MaintenanceGuard';
+import { SmsToast } from './components/ui/SmsToast';
+import NetworkStatusBar from './components/ui/NetworkStatusBar';
 
 const PushNotificationSetup: React.FC = () => {
   usePushNotifications();
@@ -74,7 +76,7 @@ const BackgroundSyncSetup: React.FC = () => {
   return null;
 };
 
-// Gold price change monitor — checks every 15 minutes
+// Gold price change monitor — checks on mount and when app resumes
 const GoldPriceMonitor: React.FC = () => {
   const { user } = useAuth();
 
@@ -86,14 +88,20 @@ const GoldPriceMonitor: React.FC = () => {
       checkGoldPriceAlert();
     }, 5000);
 
-    // Periodic check every 15 minutes
-    const interval = setInterval(() => {
-      checkGoldPriceAlert();
-    }, 15 * 60 * 1000);
+    let appStateListener: any = null;
+    if (Capacitor.isNativePlatform()) {
+      appStateListener = CapacitorApp.addListener('appStateChange', ({ isActive }) => {
+        if (isActive) {
+          checkGoldPriceAlert();
+        }
+      });
+    }
 
     return () => {
       clearTimeout(initialTimer);
-      clearInterval(interval);
+      if (appStateListener) {
+        appStateListener.then((l: any) => l.remove());
+      }
     };
   }, [user]);
 
@@ -122,8 +130,8 @@ const SmsListenerSetup: React.FC = () => {
       });
     };
 
-    // Small delay to let the app settle
-    const timer = setTimeout(initSmsListener, 3000);
+    // Delay to let the app settle
+    const timer = setTimeout(initSmsListener, 5000);
 
     return () => {
       mounted = false;
@@ -231,7 +239,7 @@ const AppLockGuard: React.FC<AppLockGuardProps> = ({ children }) => {
 
   if (checking) {
     return (
-      <div className="h-full min-h-screen flex items-center justify-center bg-[#0a0a14]">
+      <div className="h-full min-h-screen flex items-center justify-center bg-[#000000]">
         <div className="w-10 h-10 border-4 border-primary-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
@@ -239,7 +247,7 @@ const AppLockGuard: React.FC<AppLockGuardProps> = ({ children }) => {
 
   if (locked) {
     return (
-      <div className="h-full min-h-screen flex flex-col items-center justify-center bg-[#0a0a14] p-6">
+      <div className="h-full min-h-screen flex flex-col items-center justify-center bg-[#000000] p-6">
         <div className="text-center space-y-6">
           {/* Lock icon with glow */}
           <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-primary-500/20 to-secondary-500/20 backdrop-blur-xl border border-primary-500/30 flex items-center justify-center mx-auto shadow-[0_0_60px_rgba(124,58,237,0.3)]">
@@ -339,7 +347,31 @@ const AdminRouteGuard: React.FC<AdminRouteGuardProps> = ({ children }) => {
   return <>{children}</>;
 };
 
+const SmsToastContainer: React.FC = () => {
+  const { activeSmsToast, setActiveSmsToast } = useFinance();
+  return (
+    <SmsToast 
+      toast={activeSmsToast} 
+      onClose={() => setActiveSmsToast(null)} 
+    />
+  );
+};
+
+const NetworkStatusSetup: React.FC = () => {
+  const { refetch } = useFinance();
+  return <NetworkStatusBar onReconnect={refetch} />;
+};
+
 function App() {
+  const [deferServices, setDeferServices] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDeferServices(true);
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, []);
+
   return (
     <LanguageProvider>
       <AuthProvider>
@@ -348,12 +380,18 @@ function App() {
           <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
             <PushNotificationSetup />
             <NotificationInit />
-            <BackgroundSyncSetup />
-            <PermissionRequestor />
-            <GoldPriceMonitor />
+            {deferServices && (
+              <>
+                <BackgroundSyncSetup />
+                <PermissionRequestor />
+                <GoldPriceMonitor />
+                <SmsListenerSetup />
+              </>
+            )}
             <BackButtonHandler />
             <ShareActionSheet />
-            <SmsListenerSetup />
+            <SmsToastContainer />
+            <NetworkStatusSetup />
             <AppLockGuard>
             <MaintenanceGuard>
             <div className="bg-animated-gradient h-full min-h-screen">

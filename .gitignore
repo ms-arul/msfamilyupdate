@@ -1,5 +1,4 @@
 node_modules
-android
 dist
 .env
 .idea
@@ -9,3 +8,5 @@ scratch/
 *.log
 home-31f14-*.json
 google-services.json
+.codewhale
+.codewhale/

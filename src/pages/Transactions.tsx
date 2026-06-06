@@ -171,11 +171,11 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 20 }}
-        className="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl w-full max-w-sm p-7 border border-slate-100 dark:border-slate-700"
+        className="apple-glass-modal w-full max-w-sm p-7 overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex flex-col items-center text-center">
-          <div className="w-16 h-16 rounded-full bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center mb-5">
+          <div className="w-16 h-16 rounded-full bg-rose-500/10 border border-rose-500/20 dark:bg-rose-900/30 flex items-center justify-center mb-5">
             <AlertCircle size={32} className="text-rose-500" />
           </div>
           <h3 className="text-xl font-black text-slate-900 dark:text-white mb-2">
@@ -191,14 +191,14 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
         <div className="flex gap-3">
           <button
             onClick={onClose}
-            className="flex-1 py-3.5 rounded-2xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-bold hover:bg-slate-50 dark:hover:bg-slate-700 transition-all active:scale-95"
+            className="flex-1 py-3.5 rounded-2xl border border-white/20 dark:border-white/5 bg-white/20 dark:bg-black/20 text-slate-600 dark:text-slate-300 font-bold hover:bg-white/30 dark:hover:bg-black/30 transition-all active:scale-95 backdrop-blur-md"
           >
             Cancel
           </button>
           <button
             onClick={onConfirm}
             disabled={isLoading}
-            className="flex-1 py-3.5 rounded-2xl bg-rose-500 text-white font-bold hover:bg-rose-600 transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-rose-500/25 active:scale-95"
+            className="flex-1 py-3.5 rounded-2xl bg-rose-500 text-white font-bold hover:bg-rose-600 transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-rose-500/25 active:scale-95 border border-rose-400/20"
           >
             {isLoading ? <Loader2 size={18} className="animate-spin" /> : <Trash2 size={18} />}
             Delete
@@ -218,7 +218,7 @@ const Pagination: React.FC<PaginationProps> = ({ currentPage, totalPages, onPage
     const pages = [];
     const maxVisible = 5;
     let start = Math.max(1, currentPage - 2);
-    let end = Math.min(totalPages, start + maxVisible - 1);
+    const end = Math.min(totalPages, start + maxVisible - 1);
     if (end - start + 1 < maxVisible) {
       start = Math.max(1, end - maxVisible + 1);
     }
@@ -242,8 +242,8 @@ const Pagination: React.FC<PaginationProps> = ({ currentPage, totalPages, onPage
             key={page}
             onClick={() => onPageChange(page)}
             className={`w-8 h-8 rounded-xl text-xs font-bold transition-all ${currentPage === page
-                ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/25'
-                : 'hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300'
+              ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/25'
+              : 'hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300'
               }`}
           >
             {page}
@@ -651,63 +651,91 @@ export default function Transactions() {
   const hasActiveFilters = activeFilters.length > 0 || searchQuery;
 
   return (
-    <motion.div variants={container} initial="hidden" animate="show" className="space-y-5 pb-28">
+    <motion.div variants={container} initial="hidden" animate="show" className="transactions-page space-y-6 pb-28 relative">
+      {/* Background decoration blobs */}
+      <div className="transactions-page-bg" aria-hidden="true">
+        <div className="transactions-blob transactions-blob-1" />
+        <div className="transactions-blob transactions-blob-2" />
+        <div className="transactions-blob transactions-blob-3" />
+      </div>
       {/* Header Actions Portal */}
       {document.getElementById('header-actions-portal') &&
         createPortal(
-          <div className="flex gap-1.5 md:gap-2">
+          <div className="flex gap-1.5">
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className={`btn-glass !py-1.5 !px-2.5 md:!px-3 text-[10px] md:text-xs gap-1.5 ${showFilters ? '!bg-primary-500/10 !border-primary-500/30 !text-primary-500' : ''
+              aria-label="Toggle filters"
+              className={`glass-btn relative w-10 h-10 rounded-[12px] flex items-center justify-center transition-all ${showFilters
+                ? 'text-primary-500 !border-primary-500/30 !bg-primary-500/10 dark:!bg-primary-500/15'
+                : 'text-slate-600 dark:text-slate-300'
                 }`}
             >
-              <SlidersHorizontal size={14} />
-              <span className="hidden sm:inline">{t('Filters')}</span>
-              {hasActiveFilters && <span className="w-1.5 h-1.5 rounded-full bg-primary-500" />}
+              <span className="absolute top-0 left-2 right-2 h-px bg-gradient-to-r from-transparent via-white/60 dark:via-white/15 to-transparent pointer-events-none" />
+              <SlidersHorizontal size={17} strokeWidth={2.3} />
+              {hasActiveFilters && (
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-primary-500 ring-2 ring-white dark:ring-[#0a0a0a]" />
+              )}
             </button>
             <button
               onClick={() => setIsExportModalOpen(true)}
-              className="btn-glass !py-1.5 !px-2.5 md:!px-3 text-[10px] md:text-xs gap-1.5"
+              aria-label="Export PDF"
+              className="glass-btn relative w-10 h-10 rounded-[12px] flex items-center justify-center text-slate-600 dark:text-slate-300 disabled:opacity-40"
               disabled={processedTransactions.length === 0}
             >
-              <Download size={14} />
-              <span className="hidden sm:inline">{t('Export')}</span>
+              <span className="absolute top-0 left-2 right-2 h-px bg-gradient-to-r from-transparent via-white/60 dark:via-white/15 to-transparent pointer-events-none" />
+              <Download size={17} strokeWidth={2.3} />
             </button>
           </div>,
           document.getElementById('header-actions-portal') as HTMLElement
         )}
 
       {/* Quick Stats */}
-      <motion.div variants={item} className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="glass-panel p-4 text-center">
-          <div className="flex items-center justify-center gap-1.5 text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-1">
-            <BarChart3 size={12} /> {t('Total Count')}
+      <motion.div variants={item} className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+        <div className="apple-glass-card apple-glass-card-interactive apple-stat-card group">
+          <div className="absolute top-0 left-0 right-0 h-[2.5px] bg-gradient-to-r from-blue-500/0 via-blue-500/40 to-blue-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+          <div className="apple-stat-icon-wrapper bg-blue-500/10 text-blue-500 dark:bg-blue-500/20 mb-1">
+            <BarChart3 size={13} strokeWidth={2.5} />
           </div>
-          <div className="text-xl font-black text-slate-900 font-sans">
+          <div className="apple-stat-label text-slate-500 dark:text-slate-400">
+            {t('Total Count')}
+          </div>
+          <div className="apple-stat-value text-slate-900 dark:text-white">
             <AnimatedNumber value={stats.count} />
           </div>
         </div>
-        <div className="glass-panel p-4 text-center">
-          <div className="flex items-center justify-center gap-1.5 text-emerald-500 text-[10px] font-bold uppercase tracking-widest mb-1">
-            <TrendingUp size={12} /> {t('Income')}
+        <div className="apple-glass-card apple-glass-card-interactive apple-stat-card group">
+          <div className="absolute top-0 left-0 right-0 h-[2.5px] bg-gradient-to-r from-emerald-500/0 via-emerald-500/40 to-emerald-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+          <div className="apple-stat-icon-wrapper bg-emerald-500/10 text-emerald-500 dark:bg-emerald-500/20 mb-1">
+            <TrendingUp size={13} strokeWidth={2.5} />
           </div>
-          <div className="text-xl font-black text-emerald-600 font-sans">
+          <div className="apple-stat-label text-emerald-600 dark:text-emerald-400">
+            {t('Income')}
+          </div>
+          <div className="apple-stat-value text-emerald-600 dark:text-emerald-400">
             <AnimatedNumber value={stats.income} prefix="₹" />
           </div>
         </div>
-        <div className="glass-panel p-4 text-center">
-          <div className="flex items-center justify-center gap-1.5 text-rose-500 text-[10px] font-bold uppercase tracking-widest mb-1">
-            <TrendingDown size={12} /> {t('Expense')}
+        <div className="apple-glass-card apple-glass-card-interactive apple-stat-card group">
+          <div className="absolute top-0 left-0 right-0 h-[2.5px] bg-gradient-to-r from-rose-500/0 via-rose-500/40 to-rose-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+          <div className="apple-stat-icon-wrapper bg-rose-500/10 text-rose-500 dark:bg-rose-500/20 mb-1">
+            <TrendingDown size={13} strokeWidth={2.5} />
           </div>
-          <div className="text-xl font-black text-rose-600 font-sans">
+          <div className="apple-stat-label text-rose-600 dark:text-rose-400">
+            {t('Expense')}
+          </div>
+          <div className="apple-stat-value text-rose-600 dark:text-rose-400">
             <AnimatedNumber value={stats.expense} prefix="₹" />
           </div>
         </div>
-        <div className="glass-panel p-4 text-center">
-          <div className="flex items-center justify-center gap-1.5 text-violet-500 text-[10px] font-bold uppercase tracking-widest mb-1">
-            <Wallet size={12} /> {t('Net')}
+        <div className="apple-glass-card apple-glass-card-interactive apple-stat-card group">
+          <div className="absolute top-0 left-0 right-0 h-[2.5px] bg-gradient-to-r from-violet-500/0 via-violet-500/40 to-violet-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+          <div className="apple-stat-icon-wrapper bg-violet-500/10 text-violet-500 dark:bg-violet-500/20 mb-1">
+            <Wallet size={13} strokeWidth={2.5} />
           </div>
-          <div className={`text-xl font-black font-sans ${stats.net >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+          <div className="apple-stat-label text-violet-600 dark:text-violet-400">
+            {t('Net')}
+          </div>
+          <div className={`apple-stat-value ${stats.net >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
             {stats.net >= 0 ? '+' : ''}
             <AnimatedNumber value={Math.abs(stats.net)} prefix="₹" />
           </div>
@@ -715,19 +743,19 @@ export default function Transactions() {
       </motion.div>
 
       {/* Search Bar - Enhanced */}
-      <motion.div variants={item} className="relative">
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
+      <motion.div variants={item} className="relative w-full max-w-md">
         <input
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder={t('Search by category, notes, amount, or member...')}
-          className="input-field !pl-11"
+          placeholder={t('Search transactions...')}
+          className="apple-glass-input !pl-11"
         />
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none z-10" size={18} />
         {searchQuery && (
           <button
             onClick={() => setSearchQuery('')}
-            className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-lg hover:bg-slate-200 text-slate-400 transition-colors"
+            className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-400 dark:text-slate-500 transition-colors z-10"
           >
             <X size={16} />
           </button>
@@ -737,130 +765,197 @@ export default function Transactions() {
       {/* Filter Chips (active filters) */}
       <FilterChips filters={activeFilters} onRemove={removeFilter} onClearAll={clearFilters} />
 
-      {/* Expandable Filters Panel */}
-      <AnimatePresence>
-        {showFilters && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="overflow-hidden"
-          >
-            <div className="glass-panel p-5 space-y-4">
-              <div className="flex justify-between items-center">
-                <h3 className="text-sm font-bold text-slate-700 flex items-center gap-2">
-                  <Filter size={14} /> {t('Advanced Filters')}
-                </h3>
-                {hasActiveFilters && (
+      {/* Filter Dialog Modal */}
+      {createPortal(
+        <AnimatePresence>
+          {showFilters && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center"
+              onClick={() => setShowFilters(false)}
+            >
+              <motion.div
+                initial={{ opacity: 0, y: 100, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 100, scale: 0.95 }}
+                transition={{ type: 'spring', damping: 28, stiffness: 340 }}
+                className="apple-glass-modal w-full sm:max-w-lg sm:rounded-3xl rounded-t-3xl max-h-[85vh] overflow-hidden flex flex-col"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Drag Handle (mobile affordance) */}
+                <div className="flex justify-center pt-3 pb-1 sm:hidden">
+                  <div className="w-10 h-1 rounded-full bg-slate-300 dark:bg-slate-700" />
+                </div>
+
+                {/* Header */}
+                <div className="flex items-center justify-between px-6 pt-4 pb-3 border-b border-slate-100 dark:border-slate-800/60">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-primary-50 dark:bg-primary-950/40 flex items-center justify-center text-primary-500">
+                      <SlidersHorizontal size={18} />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-black text-slate-900 dark:text-white">{t('Filters & Sort')}</h3>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                        {processedTransactions.length} {t('results')}
+                        {activeFilters.length > 0 && ` • ${activeFilters.length} ${t('active')}`}
+                      </p>
+                    </div>
+                  </div>
                   <button
-                    onClick={clearFilters}
-                    className="text-xs text-primary-500 hover:text-primary-600 font-semibold"
+                    onClick={() => setShowFilters(false)}
+                    className="w-9 h-9 rounded-xl flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 dark:text-slate-500 transition-colors"
+                    aria-label="Close filters"
                   >
-                    {t('Clear All')}
+                    <X size={18} />
                   </button>
-                )}
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-                {/* Type Filter */}
-                <div>
-                  <label className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1 block">
-                    {t('Type')}
-                  </label>
-                  <div className="flex p-1 bg-slate-100 rounded-xl gap-1">
-                    {['all', 'income', 'expense'].map((tf) => (
-                      <button
-                        key={tf}
-                        onClick={() => setTypeFilter(tf)}
-                        className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${typeFilter === tf ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'
-                          }`}
-                      >
-                        {tf.charAt(0).toUpperCase() + tf.slice(1)}
-                      </button>
-                    ))}
+                </div>
+
+                {/* Scrollable Content */}
+                <div className="flex-1 overflow-y-auto custom-scrollbar px-6 py-4 space-y-5">
+
+                  {/* Transaction Type */}
+                  <div>
+                    <label className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest mb-2 block">
+                      {t('Transaction Type')}
+                    </label>
+                    <div className="flex p-1 bg-black/5 dark:bg-black/40 border border-slate-200/30 dark:border-white/5 rounded-xl gap-1 backdrop-blur-sm">
+                      {['all', 'income', 'expense'].map((tf) => (
+                        <button
+                          key={tf}
+                          onClick={() => setTypeFilter(tf)}
+                          className={`flex-1 py-2.5 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${typeFilter === tf
+                            ? tf === 'income'
+                              ? 'bg-emerald-500 text-white shadow-sm shadow-emerald-500/25'
+                              : tf === 'expense'
+                                ? 'bg-rose-500 text-white shadow-sm shadow-rose-500/25'
+                                : 'bg-white dark:bg-slate-800 shadow-sm text-slate-900 dark:text-white'
+                            : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+                            }`}
+                        >
+                          {tf === 'income' && <ArrowUpRight size={12} />}
+                          {tf === 'expense' && <ArrowDownRight size={12} />}
+                          {tf.charAt(0).toUpperCase() + tf.slice(1)}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
-                {/* Category Filter */}
-                <div>
-                  <label className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1 block">
-                    {t('Category')}
-                  </label>
-                  <select
-                    value={categoryFilter}
-                    onChange={(e) => setCategoryFilter(e.target.value)}
-                    className="input-field !pl-3 !py-2.5 text-xs"
-                  >
-                    <option value="all">{t('All Categories')}</option>
-                    {ALL_CATEGORIES.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                {/* Sort */}
-                <div>
-                  <label className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1 block">
-                    {t('Sort By')}
-                  </label>
-                  <select
-                    value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value)}
-                    className="input-field !pl-3 !py-2.5 text-xs"
-                  >
-                    <option value="date-desc">{t('Newest First')}</option>
-                    <option value="date-asc">{t('Oldest First')}</option>
-                    <option value="amount-desc">{t('Highest Amount')}</option>
-                    <option value="amount-asc">{t('Lowest Amount')}</option>
-                  </select>
-                </div>
-                {/* Date Range */}
-                <div>
-                  <label className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1 block">
-                    {t('Date Range')}
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      type="date"
-                      value={dateRange.from}
-                      onChange={(e) => setDateRange((p) => ({ ...p, from: e.target.value }))}
-                      className="input-field !pl-3 !py-2.5 text-xs flex-1"
-                    />
-                    <input
-                      type="date"
-                      value={dateRange.to}
-                      onChange={(e) => setDateRange((p) => ({ ...p, to: e.target.value }))}
-                      className="input-field !pl-3 !py-2.5 text-xs flex-1"
-                    />
-                  </div>
-                </div>
-                {/* Source Filter (Manual vs SMS) */}
-                <div>
-                  <label className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1 block">
-                    {t('Source')}
-                  </label>
-                  <div className="flex p-1 bg-slate-100 rounded-xl gap-1">
-                    {['all', 'manual', 'sms'].map((s) => (
-                      <button
-                        key={s}
-                        onClick={() => setSourceFilter(s)}
-                        className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1 ${sourceFilter === s
+
+                  {/* Source Filter */}
+                  <div>
+                    <label className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest mb-2 block">
+                      {t('Source')}
+                    </label>
+                    <div className="flex p-1 bg-black/5 dark:bg-black/40 border border-slate-200/30 dark:border-white/5 rounded-xl gap-1 backdrop-blur-sm">
+                      {['all', 'manual', 'sms'].map((s) => (
+                        <button
+                          key={s}
+                          onClick={() => setSourceFilter(s)}
+                          className={`flex-1 py-2.5 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${sourceFilter === s
                             ? s === 'sms'
                               ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-sm'
-                              : 'bg-white shadow-sm text-slate-900'
-                            : 'text-slate-500 hover:text-slate-700'
-                          }`}
-                      >
-                        {s === 'sms' && <Smartphone size={11} />}
-                        {s === 'all' ? 'All' : s === 'manual' ? 'Manual' : 'SMS'}
-                      </button>
-                    ))}
+                              : 'bg-white dark:bg-slate-800 shadow-sm text-slate-900 dark:text-white'
+                            : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+                            }`}
+                        >
+                          {s === 'sms' && <Smartphone size={12} />}
+                          {s === 'all' ? 'All' : s === 'manual' ? 'Manual' : 'SMS'}
+                        </button>
+                      ))}
+                    </div>
                   </div>
+
+                  {/* Category */}
+                  <div>
+                    <label className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest mb-2 block">
+                      {t('Category')}
+                    </label>
+                    <select
+                      value={categoryFilter}
+                      onChange={(e) => setCategoryFilter(e.target.value)}
+                      className="apple-glass-input !pl-3 !py-3 text-sm"
+                    >
+                      <option value="all">{t('All Categories')}</option>
+                      {ALL_CATEGORIES.map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Sort By */}
+                  <div>
+                    <label className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest mb-2 block">
+                      {t('Sort By')}
+                    </label>
+                    <select
+                      value={sortBy}
+                      onChange={(e) => setSortBy(e.target.value)}
+                      className="apple-glass-input !pl-3 !py-3 text-sm"
+                    >
+                      <option value="date-desc">{t('Newest First')}</option>
+                      <option value="date-asc">{t('Oldest First')}</option>
+                      <option value="amount-desc">{t('Highest Amount')}</option>
+                      <option value="amount-asc">{t('Lowest Amount')}</option>
+                    </select>
+                  </div>
+
+                  {/* Date Range */}
+                  <div>
+                    <label className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest mb-2 block">
+                      {t('Date Range')}
+                    </label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <span className="text-[9px] text-slate-400 dark:text-slate-500 font-semibold uppercase mb-1 block">{t('From')}</span>
+                        <input
+                          type="date"
+                          value={dateRange.from}
+                          onChange={(e) => setDateRange((p) => ({ ...p, from: e.target.value }))}
+                          className="apple-glass-input !pl-3 !py-2.5 text-xs"
+                        />
+                      </div>
+                      <div>
+                        <span className="text-[9px] text-slate-400 dark:text-slate-500 font-semibold uppercase mb-1 block">{t('To')}</span>
+                        <input
+                          type="date"
+                          value={dateRange.to}
+                          onChange={(e) => setDateRange((p) => ({ ...p, to: e.target.value }))}
+                          className="apple-glass-input !pl-3 !py-2.5 text-xs"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
                 </div>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+
+                {/* Footer Actions */}
+                <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-800/60 flex gap-3">
+                  <button
+                    onClick={() => {
+                      clearFilters();
+                      setShowFilters(false);
+                    }}
+                    className="flex-1 py-3 rounded-2xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 font-bold text-sm hover:bg-slate-50 dark:hover:bg-slate-900 transition-all active:scale-95"
+                  >
+                    {t('Reset All')}
+                  </button>
+                  <button
+                    onClick={() => setShowFilters(false)}
+                    className="flex-1 py-3 rounded-2xl bg-primary-500 text-white font-bold text-sm hover:bg-primary-600 transition-all shadow-lg shadow-primary-500/20 active:scale-95 flex items-center justify-center gap-2"
+                  >
+                    <Filter size={14} />
+                    {t('Apply')} ({processedTransactions.length})
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
 
       {/* Mobile Pagination placed BELOW search bar */}
       {isMobile && totalPages > 1 && (
@@ -870,16 +965,16 @@ export default function Transactions() {
       )}
 
       {/* Transaction List / Grid */}
-      <motion.div variants={item} className="glass-panel overflow-hidden">
+      <motion.div variants={item} className="apple-glass-card overflow-hidden">
         {/* Desktop Table Header */}
-        <div className="hidden sm:grid grid-cols-12 gap-3 px-5 py-3 border-b border-slate-200/60 text-[10px] text-slate-500 font-bold uppercase tracking-widest">
+        <div className="hidden sm:grid grid-cols-12 gap-3 px-5 py-4 border-b border-slate-200/20 dark:border-white/5 text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest bg-white/10 dark:bg-black/10">
           <div className="col-span-4">{t('Type')}</div>
           <div className="col-span-3">{t('Amount')}</div>
           <div className="col-span-3">{t('Member')}</div>
           <div className="col-span-2 text-right">{t('Actions')}</div>
         </div>
 
-        <div className="divide-y divide-slate-100">
+        <div className="divide-y divide-slate-200/10 dark:divide-white/5">
           <AnimatePresence initial={false}>
             {loading && paginatedTx.length === 0 ? (
               <div className="space-y-4 p-5 animate-pulse">
@@ -911,7 +1006,7 @@ export default function Transactions() {
               // List view
               groupedTransactions.map((group) => (
                 <div key={group.dateLabel}>
-                  <div className="px-5 py-2.5 text-[10px] font-bold tracking-widest text-slate-500 uppercase bg-slate-50/50 dark:bg-slate-800/50 border-y border-slate-100 dark:border-slate-700/50">
+                  <div className="px-5 py-2.5 text-[10px] font-bold tracking-widest text-slate-500 dark:text-slate-400 uppercase bg-white/20 dark:bg-black/20 backdrop-blur-md border-y border-slate-200/20 dark:border-white/5 sticky top-0 z-10">
                     {group.dateLabel}
                   </div>
                   {group.transactions.map((tx) => {
@@ -919,14 +1014,13 @@ export default function Transactions() {
                     return (
                       <motion.div
                         key={tx.id}
-                        layout
                         variants={listItemVariants}
                         initial="hidden"
                         animate="visible"
                         exit="exit"
-                        className={`flex flex-col sm:grid sm:grid-cols-12 gap-1 sm:gap-3 px-4 sm:px-5 py-3.5 sm:py-4 transition-all duration-200 group cursor-pointer sm:items-center border-b last:border-0 relative ${isSms
-                            ? 'bg-gradient-to-r from-cyan-50/60 via-blue-50/30 to-transparent dark:from-cyan-950/20 dark:via-blue-950/10 dark:to-transparent border-cyan-100/50 dark:border-cyan-900/30 hover:from-cyan-50 hover:via-blue-50/50'
-                            : 'hover:bg-slate-50/80 dark:hover:bg-slate-800/50 border-slate-100/50 dark:border-slate-700/30'
+                        className={`flex flex-col sm:grid sm:grid-cols-12 gap-1 sm:gap-3 px-4 sm:px-5 py-3.5 sm:py-4 border-b border-slate-200/20 dark:border-white/5 last:border-0 relative row-contain apple-glass-row ${isSms
+                          ? 'bg-gradient-to-r from-cyan-500/5 via-blue-500/5 to-transparent dark:from-cyan-500/5 dark:via-blue-500/5 dark:to-transparent border-l-2 border-l-cyan-500'
+                          : ''
                           }`}
                         onClick={() => setSelectedTx(tx)}
                       >
@@ -940,11 +1034,11 @@ export default function Transactions() {
                           <div className="flex items-center gap-3 w-full">
                             <div className="relative">
                               <div
-                                className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${isSms
-                                    ? 'bg-gradient-to-br from-cyan-100 to-blue-100 dark:from-cyan-900/40 dark:to-blue-900/40 text-cyan-600 dark:text-cyan-400'
-                                    : tx.type === 'income'
-                                      ? 'bg-emerald-50 text-emerald-500'
-                                      : 'bg-rose-50 text-rose-500'
+                                className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 backdrop-blur-sm border shadow-sm ${isSms
+                                  ? 'bg-gradient-to-br from-cyan-500/10 to-blue-500/10 border-cyan-500/20 text-cyan-600 dark:text-cyan-400'
+                                  : tx.type === 'income'
+                                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+                                    : 'bg-rose-500/10 border-rose-500/20 text-rose-600 dark:text-rose-400'
                                   }`}
                               >
                                 {isSms ? (
@@ -964,14 +1058,14 @@ export default function Transactions() {
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-1.5">
-                                <p className="font-semibold text-sm text-slate-800 truncate">{t(tx.category)}</p>
+                                <p className="font-semibold text-sm text-slate-800 dark:text-slate-200 truncate">{t(tx.category)}</p>
                                 {isSms && (
                                   <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-sm shrink-0">
                                     SMS
                                   </span>
                                 )}
                               </div>
-                              <p className="text-[11px] text-slate-400 sm:hidden mt-0.5">
+                              <p className="text-[11px] text-slate-500 dark:text-slate-400 sm:hidden mt-0.5">
                                 {isSms && tx.bankName ? `${tx.bankName} • ` : `${tx.memberName} • `}
                                 {new Date(tx.created_at || tx.date).toLocaleTimeString([], {
                                   hour: '2-digit',
@@ -979,7 +1073,7 @@ export default function Transactions() {
                                 })}
                               </p>
                               {tx.notes && (
-                                <p className="text-[11px] text-slate-400 truncate max-w-[180px] hidden sm:block">
+                                <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-[180px] hidden sm:block">
                                   {tx.notes}
                                 </p>
                               )}
@@ -989,12 +1083,12 @@ export default function Transactions() {
                           <div className="sm:hidden text-right pl-2 shrink-0">
                             <span
                               className={`font-black text-sm font-sans ${isSms
-                                  ? tx.type === 'income'
-                                    ? 'text-cyan-600'
-                                    : 'text-blue-600'
-                                  : tx.type === 'income'
-                                    ? 'text-emerald-600'
-                                    : 'text-rose-600'
+                                ? tx.type === 'income'
+                                  ? 'text-cyan-600'
+                                  : 'text-blue-600'
+                                : tx.type === 'income'
+                                  ? 'text-emerald-600 dark:text-emerald-400'
+                                  : 'text-rose-600 dark:text-rose-400'
                                 }`}
                             >
                               {tx.type === 'income' ? '+' : '-'}₹{Number(tx.amount).toLocaleString()}
@@ -1006,12 +1100,12 @@ export default function Transactions() {
                         <div className="hidden sm:block sm:col-span-3">
                           <span
                             className={`font-bold text-sm font-sans ${isSms
-                                ? tx.type === 'income'
-                                  ? 'text-cyan-600'
-                                  : 'text-blue-600'
-                                : tx.type === 'income'
-                                  ? 'text-emerald-600'
-                                  : 'text-rose-600'
+                              ? tx.type === 'income'
+                                ? 'text-cyan-600'
+                                : 'text-blue-600'
+                              : tx.type === 'income'
+                                ? 'text-emerald-600 dark:text-emerald-400'
+                                : 'text-rose-600 dark:text-rose-400'
                               }`}
                           >
                             {tx.type === 'income' ? '+' : '-'}₹{Number(tx.amount).toLocaleString()}
@@ -1020,9 +1114,9 @@ export default function Transactions() {
 
                         {/* Desktop Member */}
                         <div className="col-span-3 hidden sm:flex sm:items-center sm:gap-2">
-                          <span className="text-sm text-slate-600">{tx.memberName}</span>
+                          <span className="text-sm text-slate-700 dark:text-slate-300">{tx.memberName}</span>
                           {isSms && tx.bankName && (
-                            <span className="text-[10px] font-semibold text-cyan-600 bg-cyan-50 dark:bg-cyan-900/30 dark:text-cyan-400 px-1.5 py-0.5 rounded-md">
+                            <span className="text-[10px] font-semibold text-cyan-600 bg-cyan-500/10 dark:text-cyan-400 px-1.5 py-0.5 rounded-md">
                               {tx.bankName}
                             </span>
                           )}
@@ -1035,7 +1129,7 @@ export default function Transactions() {
                               e.stopPropagation();
                               setSelectedTx(tx);
                             }}
-                            className="p-2 rounded-lg text-slate-400 hover:text-primary-500 hover:bg-primary-50 transition-all opacity-0 group-hover:opacity-100"
+                            className="p-2 rounded-lg text-slate-400 hover:text-primary-500 hover:bg-primary-500/10 dark:hover:bg-primary-500/20 border border-transparent hover:border-primary-500/20 transition-all opacity-0 group-hover:opacity-100 backdrop-blur-sm"
                             aria-label="View details"
                           >
                             <Eye size={14} />
@@ -1046,7 +1140,7 @@ export default function Transactions() {
                               handleSingleDelete(tx.id);
                             }}
                             disabled={deletingId === tx.id}
-                            className="p-2 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-all opacity-0 group-hover:opacity-100 disabled:opacity-50"
+                            className="p-2 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 dark:hover:bg-rose-500/20 border border-transparent hover:border-rose-500/20 transition-all opacity-0 group-hover:opacity-100 disabled:opacity-50 backdrop-blur-sm"
                             aria-label="Delete transaction"
                           >
                             {deletingId === tx.id ? (
@@ -1086,168 +1180,174 @@ export default function Transactions() {
                 initial={{ opacity: 0, scale: 0.95, y: 20 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                className="bg-white dark:bg-[#12121f] rounded-2xl shadow-2xl w-full max-w-md p-6 relative max-h-[90vh] overflow-y-auto border border-slate-100 dark:border-slate-800/80 custom-scrollbar"
+                className="apple-glass-modal w-full max-w-md relative max-h-[90vh] overflow-hidden flex flex-col"
                 onClick={(e) => e.stopPropagation()}
               >
-                <button
-                  onClick={() => setSelectedTx(null)}
-                  className="absolute top-4 right-4 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
-                  aria-label="Close modal"
-                >
-                  <X size={18} />
-                </button>
-                <div className="space-y-5">
-                  {/* Header */}
-                  <div className="flex items-center gap-4">
-                    <div
-                      className={`w-14 h-14 rounded-2xl flex items-center justify-center ${selectedTx.type === 'income'
-                          ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-500'
-                          : 'bg-rose-50 dark:bg-rose-950/30 text-rose-500'
-                        }`}
-                    >
-                      {selectedTx.type === 'income' ? <ArrowUpRight size={28} /> : <ArrowDownRight size={28} />}
-                    </div>
-                    <div>
-                      <h3 className="text-xl font-black text-slate-900 dark:text-white">{t(selectedTx.category)}</h3>
-                      <span
-                        className={`text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${selectedTx.type === 'income'
-                            ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400'
-                            : 'bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400'
+                {/* Sticky Close Button Header */}
+                <div className="sticky top-0 z-20 flex justify-end px-4 pt-4 pb-1">
+                  <button
+                    onClick={() => setSelectedTx(null)}
+                    className="p-2 rounded-xl bg-white/40 dark:bg-black/30 backdrop-blur-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-all border border-slate-200/30 dark:border-white/10 shadow-sm"
+                    aria-label="Close modal"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+                {/* Scrollable Content */}
+                <div className="flex-1 overflow-y-auto custom-scrollbar px-6 pb-6">
+                  <div className="space-y-5">
+                    {/* Header */}
+                    <div className="flex items-center gap-4">
+                      <div
+                        className={`w-14 h-14 rounded-2xl flex items-center justify-center backdrop-blur-sm border shadow-sm ${selectedTx.type === 'income'
+                          ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500'
+                          : 'bg-rose-500/10 border-rose-500/20 text-rose-500'
                           }`}
                       >
-                        {t(selectedTx.type)}
-                      </span>
-                    </div>
-                  </div>
-                  {/* Amount */}
-                  <div className="text-center py-4 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-100/50 dark:border-slate-700/20">
-                    <p
-                      className={`text-4xl font-black font-sans ${selectedTx.type === 'income' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
-                        }`}
-                    >
-                      {selectedTx.type === 'income' ? '+' : '-'}₹{Number(selectedTx.amount).toLocaleString()}
-                    </p>
-                  </div>
-                  {/* Details */}
-                  <div className="space-y-3">
-                    <div className="flex justify-between py-2 border-b border-slate-100 dark:border-slate-800/60">
-                      <span className="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-2">
-                        <Calendar size={14} /> {t('Date')}
-                      </span>
-                      <span className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-                        {selectedTx.date}
-                      </span>
-                    </div>
-                    <div className="flex justify-between py-2 border-b border-slate-100 dark:border-slate-800/60">
-                      <span className="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-2">
-                        <Clock size={14} /> {t('Time')}
-                      </span>
-                      <span className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-                        {new Date(selectedTx.created_at || selectedTx.date).toLocaleTimeString([], {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      </span>
-                    </div>
-                    <div className="flex justify-between py-2 border-b border-slate-100 dark:border-slate-800/60">
-                      <span className="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-2">
-                        <Tag size={14} /> {t('Category')}
-                      </span>
-                      <span className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-                        {t(selectedTx.category)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between py-2 border-b border-slate-100 dark:border-slate-800/60">
-                      <span className="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-2">
-                        <Clock size={14} /> {t('Member')}
-                      </span>
-                      <span className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-                        {t(selectedTx.memberName)}
-                      </span>
-                    </div>
-                    {/* SMS Source Info */}
-                    {selectedTx.source === 'sms' && (
-                      <div className="mt-2 p-3 rounded-xl bg-gradient-to-r from-cyan-50 to-blue-50 dark:from-cyan-950/20 dark:to-blue-950/15 border border-cyan-200/50 dark:border-cyan-800/30 space-y-2">
-                        <div className="flex items-center gap-2 mb-1">
-                          <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-cyan-400 to-blue-500 flex items-center justify-center">
-                            <Smartphone size={12} className="text-white" />
-                          </div>
-                          <span className="text-xs font-black uppercase tracking-wider text-cyan-700 dark:text-cyan-400">
-                            Auto-detected from SMS
-                          </span>
-                        </div>
-                        {selectedTx.bankName && (
-                          <div className="flex justify-between">
-                            <span className="text-xs text-cyan-600 dark:text-cyan-400">Bank</span>
-                            <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                              {selectedTx.bankName}
-                            </span>
-                          </div>
-                        )}
-                        {selectedTx.merchantName && (
-                          <div className="flex justify-between">
-                            <span className="text-xs text-cyan-600 dark:text-cyan-400">Merchant</span>
-                            <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                              {selectedTx.merchantName}
-                            </span>
-                          </div>
-                        )}
-                        {selectedTx.smsConfidence && (
-                          <div className="flex justify-between">
-                            <span className="text-xs text-cyan-600 dark:text-cyan-400">Confidence</span>
-                            <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                              {(selectedTx.smsConfidence * 100).toFixed(0)}%
-                            </span>
-                          </div>
-                        )}
+                        {selectedTx.type === 'income' ? <ArrowUpRight size={28} /> : <ArrowDownRight size={28} />}
                       </div>
-                    )}
-                    {selectedTx.notes && (
-                      <div className="py-2">
-                        <span className="text-sm text-slate-500 dark:text-slate-400 block mb-1">{t('Notes')}</span>
-                        <p className="text-sm text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/40 p-3 rounded-xl border border-slate-100/50 dark:border-slate-700/20">
-                          {selectedTx.notes}
-                        </p>
-                      </div>
-                    )}
-                    {selectedTx.proofUrl && (
-                      <div className="py-2">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-sm text-slate-500 dark:text-slate-400">{t('Receipt Proof')}</span>
-                          <button
-                            onClick={() => setLightboxImg(selectedTx.proofUrl)}
-                            className="text-xs font-bold text-primary-500 hover:text-primary-600 flex items-center gap-1 bg-primary-50 dark:bg-primary-950/40 px-2 py-1 rounded-lg border border-primary-100/50 dark:border-primary-900/30"
-                          >
-                            <Eye size={12} /> {t('View Full')}
-                          </button>
-                        </div>
-                        <div
-                          className="relative rounded-xl overflow-hidden cursor-pointer group border border-slate-200 dark:border-slate-800/80 h-40"
-                          onClick={() => setLightboxImg(selectedTx.proofUrl)}
+                      <div>
+                        <h3 className="text-xl font-black text-slate-900 dark:text-white">{t(selectedTx.category)}</h3>
+                        <span
+                          className={`text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${selectedTx.type === 'income'
+                            ? 'bg-emerald-500/10 dark:bg-emerald-950/30 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+                            : 'bg-rose-500/10 dark:bg-rose-950/30 border border-rose-500/20 text-rose-600 dark:text-rose-400'
+                            }`}
                         >
-                          <img
-                            src={selectedTx.proofUrl}
-                            alt="Receipt"
-                            className="w-full h-full object-cover transition-transform group-hover:scale-105"
-                          />
-                          <div className="absolute inset-0 bg-slate-900/0 group-hover:bg-slate-900/10 transition-colors flex items-center justify-center">
-                            <Eye className="text-white opacity-0 group-hover:opacity-100 drop-shadow-md" size={24} />
+                          {t(selectedTx.type)}
+                        </span>
+                      </div>
+                    </div>
+                    {/* Amount */}
+                    <div className="text-center py-6 bg-white/20 dark:bg-black/30 rounded-2xl border border-white/20 dark:border-white/5 shadow-inner">
+                      <p
+                        className={`text-4.5xl font-black font-sans tracking-tight ${selectedTx.type === 'income' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
+                          }`}
+                      >
+                        {selectedTx.type === 'income' ? '+' : '-'}₹{Number(selectedTx.amount).toLocaleString()}
+                      </p>
+                    </div>
+                    {/* Details */}
+                    <div className="space-y-3">
+                      <div className="flex justify-between py-3 apple-detail-item">
+                        <span className="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                          <Calendar size={14} /> {t('Date')}
+                        </span>
+                        <span className="text-sm font-bold text-slate-800 dark:text-slate-200">
+                          {selectedTx.date}
+                        </span>
+                      </div>
+                      <div className="flex justify-between py-3 apple-detail-item">
+                        <span className="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                          <Clock size={14} /> {t('Time')}
+                        </span>
+                        <span className="text-sm font-bold text-slate-800 dark:text-slate-200">
+                          {new Date(selectedTx.created_at || selectedTx.date).toLocaleTimeString([], {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </span>
+                      </div>
+                      <div className="flex justify-between py-3 apple-detail-item">
+                        <span className="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                          <Tag size={14} /> {t('Category')}
+                        </span>
+                        <span className="text-sm font-bold text-slate-800 dark:text-slate-200">
+                          {t(selectedTx.category)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between py-3 apple-detail-item">
+                        <span className="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                          <Clock size={14} /> {t('Member')}
+                        </span>
+                        <span className="text-sm font-bold text-slate-800 dark:text-slate-200">
+                          {t(selectedTx.memberName)}
+                        </span>
+                      </div>
+                      {/* SMS Source Info */}
+                      {selectedTx.source === 'sms' && (
+                        <div className="mt-2.5 p-3.5 rounded-2xl bg-cyan-500/5 dark:bg-cyan-500/10 border border-cyan-500/20 space-y-2.5 backdrop-blur-md">
+                          <div className="flex items-center gap-2 mb-1">
+                            <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-cyan-400 to-blue-500 flex items-center justify-center">
+                              <Smartphone size={12} className="text-white" />
+                            </div>
+                            <span className="text-xs font-black uppercase tracking-wider text-cyan-700 dark:text-cyan-400">
+                              Auto-detected from SMS
+                            </span>
+                          </div>
+                          {selectedTx.bankName && (
+                            <div className="flex justify-between">
+                              <span className="text-xs text-cyan-600 dark:text-cyan-400">Bank</span>
+                              <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                                {selectedTx.bankName}
+                              </span>
+                            </div>
+                          )}
+                          {selectedTx.merchantName && (
+                            <div className="flex justify-between">
+                              <span className="text-xs text-cyan-600 dark:text-cyan-400">Merchant</span>
+                              <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                                {selectedTx.merchantName}
+                              </span>
+                            </div>
+                          )}
+                          {selectedTx.smsConfidence && (
+                            <div className="flex justify-between">
+                              <span className="text-xs text-cyan-600 dark:text-cyan-400">Confidence</span>
+                              <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                                {(selectedTx.smsConfidence * 100).toFixed(0)}%
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      {selectedTx.notes && (
+                        <div className="py-2.5">
+                          <span className="text-sm font-semibold text-slate-500 dark:text-slate-400 block mb-1.5">{t('Notes')}</span>
+                          <p className="text-sm text-slate-700 dark:text-slate-300 bg-white/20 dark:bg-black/20 p-3.5 rounded-2xl border border-white/20 dark:border-white/5 whitespace-pre-wrap">
+                            {selectedTx.notes}
+                          </p>
+                        </div>
+                      )}
+                      {selectedTx.proofUrl && (
+                        <div className="py-2.5">
+                          <div className="flex items-center justify-between mb-1.5">
+                            <span className="text-sm font-semibold text-slate-500 dark:text-slate-400">{t('Receipt Proof')}</span>
+                            <button
+                              onClick={() => setLightboxImg(selectedTx.proofUrl)}
+                              className="text-xs font-bold text-primary-500 hover:text-primary-600 flex items-center gap-1 bg-primary-500/10 dark:bg-primary-500/20 px-2.5 py-1 rounded-lg border border-primary-500/20 backdrop-blur-sm"
+                            >
+                              <Eye size={12} /> {t('View Full')}
+                            </button>
+                          </div>
+                          <div
+                            className="relative rounded-2xl overflow-hidden cursor-pointer group border border-slate-200/30 dark:border-white/5 h-40"
+                            onClick={() => setLightboxImg(selectedTx.proofUrl)}
+                          >
+                            <img
+                              src={selectedTx.proofUrl}
+                              alt="Receipt"
+                              className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                            />
+                            <div className="absolute inset-0 bg-slate-900/0 group-hover:bg-slate-900/10 transition-colors flex items-center justify-center">
+                              <Eye className="text-white opacity-0 group-hover:opacity-100 drop-shadow-md" size={24} />
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    )}
+                      )}
+                    </div>
+                    <button
+                      onClick={() => {
+                        if (selectedTx) {
+                          handleSingleDelete(selectedTx.id);
+                          setSelectedTx(null);
+                        }
+                      }}
+                      className="w-full py-3.5 text-sm font-bold text-rose-500 bg-rose-500/10 dark:bg-rose-500/20 rounded-2xl hover:bg-rose-500/20 dark:hover:bg-rose-500/30 transition-all border border-rose-500/20 backdrop-blur-md"
+                    >
+                      {t('Delete Transaction')}
+                    </button>
                   </div>
-                  <button
-                    onClick={() => {
-                      if (selectedTx) {
-                        handleSingleDelete(selectedTx.id);
-                        setSelectedTx(null);
-                      }
-                    }}
-                    className="w-full py-3 text-sm font-bold text-rose-500 bg-rose-50 dark:bg-rose-950/20 rounded-xl hover:bg-rose-100 dark:hover:bg-rose-900/30 transition-all border border-rose-100/50 dark:border-rose-900/20"
-                  >
-                    {t('Delete Transaction')}
-                  </button>
                 </div>
               </motion.div>
             </motion.div>
@@ -1304,19 +1404,19 @@ export default function Transactions() {
                 initial={{ opacity: 0, scale: 0.95, y: 20 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 relative"
+                className="apple-glass-modal w-full max-w-sm p-6 relative overflow-hidden"
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="flex items-center justify-between mb-6">
                   <div className="flex items-center gap-2">
-                    <div className="p-2 rounded-xl bg-primary-50 text-primary-500">
+                    <div className="p-2 rounded-xl bg-primary-50 dark:bg-primary-950/40 text-primary-500">
                       <Download size={20} />
                     </div>
-                    <h3 className="text-lg font-bold text-slate-900">{t('Export History')}</h3>
+                    <h3 className="text-lg font-bold text-slate-900 dark:text-white">{t('Export History')}</h3>
                   </div>
                   <button
                     onClick={() => setIsExportModalOpen(false)}
-                    className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400"
+                    className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 dark:text-slate-500"
                     aria-label="Close export modal"
                   >
                     <X size={20} />
@@ -1324,7 +1424,7 @@ export default function Transactions() {
                 </div>
                 <div className="space-y-4">
                   <div>
-                    <label className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1.5 block">
+                    <label className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest mb-1.5 block">
                       {t('From Date')}
                     </label>
                     <div className="relative">
@@ -1333,12 +1433,12 @@ export default function Transactions() {
                         type="date"
                         value={exportRange.from}
                         onChange={(e) => setExportRange((r) => ({ ...r, from: e.target.value }))}
-                        className="input-field !pl-10 !py-2.5 text-sm"
+                        className="apple-glass-input !pl-10 !py-2.5 text-sm"
                       />
                     </div>
                   </div>
                   <div>
-                    <label className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1.5 block">
+                    <label className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest mb-1.5 block">
                       {t('To Date')}
                     </label>
                     <div className="relative">
@@ -1347,7 +1447,7 @@ export default function Transactions() {
                         type="date"
                         value={exportRange.to}
                         onChange={(e) => setExportRange((r) => ({ ...r, to: e.target.value }))}
-                        className="input-field !pl-10 !py-2.5 text-sm"
+                        className="apple-glass-input !pl-10 !py-2.5 text-sm"
                       />
                     </div>
                   </div>
@@ -1386,6 +1486,268 @@ export default function Transactions() {
 
       {/* Toast */}
       <Toast message={toast.message} visible={toast.visible} icon={toast.icon} type={toast.type} />
+
+      {/* Scoped Apple Glass UI Styles */}
+      <style>{`
+        /* Scoped styles to the transactions page only */
+        .transactions-page {
+          --glass-bg: rgba(255, 255, 255, 0.45);
+          --glass-border: rgba(255, 255, 255, 0.4);
+          --glass-border-hover: rgba(255, 255, 255, 0.6);
+          --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.04);
+          --glass-text-muted: rgba(15, 23, 42, 0.6);
+          --glass-input-bg: rgba(255, 255, 255, 0.35);
+          --glass-inner-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.03);
+        }
+
+        .dark .transactions-page {
+          --glass-bg: rgba(15, 15, 25, 0.45);
+          --glass-border: rgba(255, 255, 255, 0.08);
+          --glass-border-hover: rgba(255, 255, 255, 0.15);
+          --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+          --glass-text-muted: rgba(226, 232, 240, 0.6);
+          --glass-input-bg: rgba(0, 0, 0, 0.3);
+          --glass-inner-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.2);
+        }
+
+        /* Background animated mesh blobs */
+        .transactions-page-bg {
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          z-index: 0;
+          overflow: hidden;
+          pointer-events: none;
+        }
+
+        .transactions-blob {
+          position: absolute;
+          border-radius: 50%;
+          filter: blur(80px);
+          opacity: 0.15;
+          mix-blend-mode: multiply;
+          animation: float-blob 20s infinite ease-in-out;
+        }
+
+        .dark .transactions-blob {
+          display: none;
+        }
+
+        .transactions-blob-1 {
+          top: 10%;
+          left: 15%;
+          width: 300px;
+          height: 300px;
+          background: radial-gradient(circle, rgba(139, 92, 246, 0.6) 0%, rgba(59, 130, 246, 0.6) 100%);
+          animation-duration: 25s;
+        }
+
+        .transactions-blob-2 {
+          top: 40%;
+          right: 10%;
+          width: 350px;
+          height: 350px;
+          background: radial-gradient(circle, rgba(236, 72, 153, 0.6) 0%, rgba(139, 92, 246, 0.6) 100%);
+          animation-delay: -5s;
+          animation-duration: 30s;
+        }
+
+        .transactions-blob-3 {
+          bottom: 10%;
+          left: 30%;
+          width: 280px;
+          height: 280px;
+          background: radial-gradient(circle, rgba(6, 182, 212, 0.6) 0%, rgba(59, 130, 246, 0.6) 100%);
+          animation-delay: -10s;
+          animation-duration: 22s;
+        }
+
+        @keyframes float-blob {
+          0% {
+            transform: translate(0px, 0px) scale(1);
+          }
+          33% {
+            transform: translate(30px, -50px) scale(1.1);
+          }
+          66% {
+            transform: translate(-20px, 20px) scale(0.95);
+          }
+          100% {
+            transform: translate(0px, 0px) scale(1);
+          }
+        }
+
+        /* Apple-style Glass Cards */
+        .apple-glass-card {
+          background: var(--glass-bg);
+          backdrop-filter: blur(25px) saturate(190%);
+          -webkit-backdrop-filter: blur(25px) saturate(190%);
+          border: 1px solid var(--glass-border);
+          box-shadow: 
+            var(--glass-shadow),
+            inset 0 1px 1px 0 rgba(255, 255, 255, 0.2),
+            inset 0 -1px 1px 0 rgba(0, 0, 0, 0.05);
+          border-radius: 24px;
+          position: relative;
+          transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .apple-glass-card::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          border-radius: 24px;
+          background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 50%, rgba(0,0,0,0.02) 100%);
+          pointer-events: none;
+        }
+
+        .dark .apple-glass-card::before {
+          background: linear-gradient(135deg, rgba(255,255,255,0.02) 0%, rgba(255,255,255,0) 50%, rgba(0,0,0,0.01) 100%);
+        }
+
+        /* Glass card hover effect */
+        .apple-glass-card-interactive {
+          cursor: pointer;
+        }
+        
+        .apple-glass-card-interactive:hover {
+          transform: translateY(-4px);
+          border-color: var(--glass-border-hover);
+          box-shadow: 
+            0 20px 40px rgba(0, 0, 0, 0.08),
+            inset 0 1px 1px 0 rgba(255, 255, 255, 0.3);
+        }
+
+        .dark .apple-glass-card-interactive:hover {
+          box-shadow: 
+            0 20px 40px rgba(0, 0, 0, 0.45),
+            inset 0 1px 1px 0 rgba(255, 255, 255, 0.15);
+        }
+
+        .apple-glass-card-interactive:active {
+          transform: translateY(-1px) scale(0.98);
+        }
+
+        /* Glass Stats Cards specific styling */
+        .apple-stat-card {
+          padding: 0.55rem 0.45rem;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          text-align: center;
+          z-index: 1;
+          border-radius: 16px;
+        }
+
+        .apple-stat-label {
+          font-size: 9px;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+          margin-bottom: 0.08rem;
+          display: flex;
+          align-items: center;
+          gap: 0.25rem;
+        }
+
+        .apple-stat-value {
+          font-size: 1.15rem;
+          font-weight: 900;
+          letter-spacing: -0.02em;
+        }
+
+        .apple-stat-icon-wrapper {
+          width: 26px;
+          height: 26px;
+          border-radius: 8px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 4px 10px rgba(0, 0, 0, 0.03);
+          transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .apple-glass-card-interactive:hover .apple-stat-icon-wrapper {
+          transform: scale(1.1) rotate(3deg);
+        }
+
+        /* Apple-style Glass Input */
+        .apple-glass-input {
+          width: 100%;
+          background: var(--glass-input-bg);
+          backdrop-filter: blur(15px) saturate(150%);
+          -webkit-backdrop-filter: blur(15px) saturate(150%);
+          border: 1px solid var(--glass-border);
+          border-radius: 16px;
+          padding: 0.875rem 1rem 0.875rem 2.75rem;
+          color: inherit;
+          outline: none;
+          transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+          box-shadow: var(--glass-inner-shadow);
+        }
+
+        .apple-glass-input:focus {
+          border-color: #8b5cf6;
+          background: rgba(255, 255, 255, 0.55);
+          box-shadow: 
+            0 0 0 4px rgba(139, 92, 246, 0.15),
+            var(--glass-inner-shadow);
+        }
+
+        .dark .apple-glass-input:focus {
+          background: rgba(0, 0, 0, 0.45);
+          box-shadow: 
+            0 0 0 4px rgba(139, 92, 246, 0.25),
+            var(--glass-inner-shadow);
+        }
+
+        /* Glass row items */
+        .apple-glass-row {
+          transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .apple-glass-row:hover {
+          background: rgba(255, 255, 255, 0.25) !important;
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+        }
+
+        .dark .apple-glass-row:hover {
+          background: rgba(255, 255, 255, 0.04) !important;
+        }
+
+        /* Glass Modal Sheet (Vision Pro / macOS style) */
+        .apple-glass-modal {
+          background: rgba(255, 255, 255, 0.65);
+          backdrop-filter: blur(40px) saturate(200%);
+          -webkit-backdrop-filter: blur(40px) saturate(200%);
+          border: 1px solid rgba(255, 255, 255, 0.5);
+          box-shadow: 
+            0 30px 70px rgba(0, 0, 0, 0.15),
+            inset 0 1px 0 rgba(255, 255, 255, 0.4);
+          border-radius: 28px;
+        }
+
+        .dark .apple-glass-modal {
+          background: rgba(20, 20, 25, 0.85);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          box-shadow: 
+            0 30px 70px rgba(0, 0, 0, 0.5),
+            inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        }
+
+        /* Fine tuning the modal details */
+        .apple-detail-item {
+          border-bottom: 1px solid rgba(226, 232, 240, 0.3);
+        }
+
+        .dark .apple-detail-item {
+          border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+        }
+      `}</style>
     </motion.div>
   );
 }

@@ -20,7 +20,10 @@ export default {
         mono: ['JetBrains Mono', 'monospace'],
       },
       colors: {
-        background: '#06060e',
+        background: '#000000',
+        'surface-dark': '#0A0A0A',
+        'card-dark': '#111111',
+        'border-dark': '#1A1A1A',
         surface: 'rgba(255, 255, 255, 0.04)',
         surfaceHover: 'rgba(255, 255, 255, 0.08)',
         surfaceActive: 'rgba(255, 255, 255, 0.12)',
@@ -40,7 +43,8 @@ export default {
           900: '#4c1d95',
         },
         secondary: {
-          DEFAULT: '#22d3ee',
+          DEFAULT: '#00E5FF',
+          300: '#33EBFF',
           400: '#22d3ee',
           500: '#06b6d4',
           600: '#0891b2',

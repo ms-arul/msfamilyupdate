@@ -150,7 +150,7 @@ function storeDailyHistory(rateObj: MetalRates): void {
   const today = new Date().toISOString().split('T')[0];
   try {
     const historyStr = localStorage.getItem(HISTORY_KEY);
-    let history = historyStr ? JSON.parse(historyStr) : {};
+    const history = historyStr ? JSON.parse(historyStr) : {};
     
     history[today] = {
       gold24: rateObj.gold24,
@@ -241,7 +241,7 @@ export interface AssetMetrics {
 }
 
 export function calculateAssetMetrics(asset: any, rates: MetalRates): AssetMetrics {
-  let currentUnitRate = getRateForAsset(asset.asset_type, asset.category, rates);
+  const currentUnitRate = getRateForAsset(asset.asset_type, asset.category, rates);
   
   let currentValue = 0;
   let hasLiveRate = false;

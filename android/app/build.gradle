@@ -1,0 +1,129 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+// KSP replaces deprecated kapt for Kotlin 2.0+ annotation processing (Room)
+apply plugin: 'com.google.devtools.ksp'
+
+android {
+    namespace = "com.msfamily.app"
+    compileSdk = rootProject.ext.compileSdkVersion
+    defaultConfig {
+        applicationId "com.msfamily.app"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode 2
+        versionName "1.1"
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+
+    buildFeatures {
+        buildConfig = true
+    }
+
+    // Explicit compile options — must match capacitor.build.gradle's VERSION_21
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_21
+        targetCompatibility JavaVersion.VERSION_21
+    }
+
+    // CRITICAL: Kotlin JVM target must match Java compile options.
+    // Without this, Kotlin defaults to JVM 1.8 while Java targets JDK 21 → bytecode mismatch crash.
+    kotlinOptions {
+        jvmTarget = "21"
+    }
+
+    signingConfigs {
+        release {
+            // Use the debug keystore for now — replace with your own keystore for Play Store
+            storeFile file("${System.getProperty('user.home')}/.android/debug.keystore")
+            storePassword "android"
+            keyAlias "androiddebugkey"
+            keyPassword "android"
+        }
+    }
+    buildTypes {
+        release {
+            signingConfig signingConfigs.release
+            shrinkResources false
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+        debug {
+            // Uses Android's default debug keystore automatically — no signingConfig needed
+            debuggable true
+        }
+    }
+
+    // Replaced deprecated 'packagingOptions' with 'packaging' for AGP 8.13+
+    packaging {
+        resources {
+            excludes += [
+                'META-INF/DEPENDENCIES',
+                'META-INF/LICENSE',
+                'META-INF/LICENSE.txt',
+                'META-INF/NOTICE',
+                'META-INF/NOTICE.txt',
+                'META-INF/INDEX.LIST',
+                'META-INF/io.netty.versions.properties'
+            ]
+        }
+    }
+}
+
+repositories {
+    flatDir{
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    // Biometric authentication (fingerprint, face unlock)
+    implementation "androidx.biometric:biometric:1.1.0"
+    
+    // Import the Firebase BoM
+    implementation platform('com.google.firebase:firebase-bom:34.13.0')
+    // Add Firebase Analytics
+    implementation 'com.google.firebase:firebase-analytics'
+    // Add Firebase Cloud Messaging
+    implementation 'com.google.firebase:firebase-messaging'
+
+    // Google Play Services Location for background tracking
+    implementation 'com.google.android.gms:play-services-location:21.3.0'
+
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation project(':capacitor-cordova-android-plugins')
+
+    // Kotlin
+    implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
+    implementation "androidx.core:core-ktx:1.17.0"
+
+    // Room Database — using KSP instead of deprecated kapt
+    implementation "androidx.room:room-runtime:2.7.0"
+    implementation "androidx.room:room-ktx:2.7.0"
+    ksp "androidx.room:room-compiler:2.7.0"
+
+    // WorkManager (Kotlin coroutines support)
+    implementation "androidx.work:work-runtime-ktx:2.10.0"
+}
+
+apply from: 'capacitor.build.gradle'
+
+try {
+    def servicesJSON = file('google-services.json')
+    if (servicesJSON.text) {
+        apply plugin: 'com.google.gms.google-services'
+    }
+} catch(Exception e) {
+    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}

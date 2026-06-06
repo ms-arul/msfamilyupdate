@@ -1,5 +1,8 @@
 import { getLiveRates } from './rateService';
 import { triggerInstantNotification } from './notificationService';
+import { registerPlugin, Capacitor } from '@capacitor/core';
+
+const SmsReader = registerPlugin<any>('SmsReader');
 
 // ── Storage Keys ────────────────────────────────────────────────────────────
 const LAST_GOLD_PRICE_KEY = 'ms_gold_last_price';
@@ -21,8 +24,22 @@ const ALERT_COOLDOWN_MS = 30 * 60 * 1000;
 export const setGoldAlertThreshold = (price: number | null): void => {
   if (price && price > 0) {
     localStorage.setItem(GOLD_ALERT_THRESHOLD_KEY, String(price));
+    if (Capacitor.isNativePlatform()) {
+      try {
+        SmsReader.setGoldAlertThreshold({ price });
+      } catch (e) {
+        console.warn("Failed to sync gold threshold to native preferences", e);
+      }
+    }
   } else {
     localStorage.removeItem(GOLD_ALERT_THRESHOLD_KEY);
+    if (Capacitor.isNativePlatform()) {
+      try {
+        SmsReader.setGoldAlertThreshold({ price: null });
+      } catch (e) {
+        console.warn("Failed to clear gold threshold in native preferences", e);
+      }
+    }
   }
 };
 
@@ -82,6 +99,16 @@ function markAlertFired(): void {
  */
 export async function checkGoldPriceAlert(): Promise<void> {
   try {
+    // Proactively sync threshold to native side on check
+    if (Capacitor.isNativePlatform()) {
+      try {
+        const threshold = getGoldAlertThreshold();
+        SmsReader.setGoldAlertThreshold({ price: threshold });
+      } catch (e) {
+        console.warn("Failed to auto-sync threshold to native prefs", e);
+      }
+    }
+
     const rates = await getLiveRates();
     if (!rates || !rates.gold24) return;
 

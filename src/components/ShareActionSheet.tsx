@@ -7,6 +7,7 @@ import { FileText, ShieldCheck, X } from 'lucide-react';
 interface ShareData {
   text?: string;
   imageUri?: string;
+  pdfUri?: string;
 }
 
 const ShareActionSheet: React.FC = () => {
@@ -37,11 +38,16 @@ const ShareActionSheet: React.FC = () => {
           } else if (type === 'image' && uri) {
             setShareData({ imageUri: uri });
             setIsOpen(true);
+          } else if (type === 'pdf' && uri) {
+            setShareData({ pdfUri: uri });
+            setIsOpen(true);
           }
         } else if (host === 'addtransaction' || host === 'add') {
           navigate('/add');
         } else if (host === 'myproofs' || host === 'proofs') {
           navigate('/proofs');
+        } else if (host === 'loans') {
+          navigate('/loans');
         }
       } catch (err) {
         console.warn('Failed to parse appUrlOpen URL:', err);
@@ -82,7 +88,7 @@ const ShareActionSheet: React.FC = () => {
             <div className="flex justify-between items-start mb-6">
               <div>
                 <h2 className="text-xl font-bold text-slate-800">What do you want to do?</h2>
-                <p className="text-sm text-slate-500 mt-1">Select where to save the shared {shareData?.text ? 'text content' : 'image file'}.</p>
+                <p className="text-sm text-slate-500 mt-1">Select where to save the shared {shareData?.text ? 'text content' : shareData?.pdfUri ? 'PDF document' : 'image file'}.</p>
               </div>
               <button 
                 onClick={() => setIsOpen(false)}

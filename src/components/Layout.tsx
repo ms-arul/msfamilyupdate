@@ -339,7 +339,7 @@ export default function Layout() {
         >
           <Bell size={18} strokeWidth={2} />
           {hasUnread && (
-            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-400 rounded-full ring-1 ring-white dark:ring-[#1a1a2e] badge-pulse" />
+            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-400 rounded-full ring-1 ring-white dark:ring-[#0a0a0a] badge-pulse" />
           )}
         </motion.div>
       )}
@@ -367,23 +367,23 @@ export default function Layout() {
   );
 
   return (
-    <div className="flex h-screen overflow-hidden text-slate-900 dark:text-slate-100 relative bg-gradient-to-br from-slate-100 via-slate-50 to-slate-100 dark:from-[#08081a] dark:via-[#0c0c1e] dark:to-[#0a0a18] transition-colors duration-300">
+    <div className="flex h-screen overflow-hidden text-slate-900 dark:text-slate-100 relative bg-gradient-to-br from-slate-100 via-slate-50 to-slate-100 dark:from-[#000000] dark:via-[#050505] dark:to-[#000000] transition-colors duration-300">
 
       {/* Ambient background blobs */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden z-0" aria-hidden>
-        <div className="absolute -top-32 -left-32 w-[600px] h-[600px] rounded-full bg-primary-400/10 dark:bg-primary-500/6 blur-[100px]" />
-        <div className="absolute -bottom-32 -right-32 w-[500px] h-[500px] rounded-full bg-indigo-400/8 dark:bg-indigo-500/5 blur-[80px]" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[400px] rounded-full bg-sky-300/5 dark:bg-sky-400/3 blur-[120px]" />
+        <div className="absolute -top-32 -left-32 w-[600px] h-[600px] rounded-full bg-primary-400/10 dark:bg-primary-500/6 blur-[100px] dark:hidden" />
+        <div className="absolute -bottom-32 -right-32 w-[500px] h-[500px] rounded-full bg-indigo-400/8 dark:bg-indigo-500/5 blur-[80px] dark:hidden" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[400px] rounded-full bg-sky-300/5 dark:bg-sky-400/3 blur-[120px] dark:hidden" />
       </div>
 
       {/* Desktop Sidebar */}
       <DesktopSidebar ref={sidebarRef as any} user={user} handleLogout={handleLogout} />
 
       {/* Top status bar gradient fade overlay */}
-      <div className="md:hidden fixed top-0 left-0 right-0 z-[49] pointer-events-none h-[calc(env(safe-area-inset-top,24px)+5.2rem)] bg-gradient-to-b from-slate-100 via-slate-100/98 via-slate-100/75 to-transparent dark:from-[#08081a] dark:via-[#08081a]/98 dark:via-[#08081a]/75 to-transparent" />
+      <div className="md:hidden fixed top-0 left-0 right-0 z-[49] pointer-events-none h-[calc(env(safe-area-inset-top,0px)+3.8rem)] bg-gradient-to-b from-slate-100 via-slate-100/98 via-slate-100/75 to-transparent dark:from-[#000000] dark:via-[#000000]/98 dark:via-[#000000]/75 to-transparent" />
 
       {/* ── Mobile Header ───────────────────────────────────────────────────── */}
-      <div className="md:hidden fixed top-0 left-0 right-0 z-50 pointer-events-none pt-[calc(env(safe-area-inset-top,24px)+8px)]">
+      <div className="md:hidden fixed top-0 left-0 right-0 z-50 pointer-events-none pt-[calc(env(safe-area-inset-top,0px)+8px)]">
         <div className="flex items-center justify-between px-3 pt-1 gap-2">
 
           {/* Menu button */}
@@ -445,6 +445,9 @@ export default function Layout() {
       {/* Mobile Bottom Navigation */}
       <MobileBottomNav currentPath={location.pathname} setMobileOpen={setMobileOpen} mobileOpen={mobileOpen} />
 
+      {/* Mobile Bottom Navigation Blur Fade Overlay */}
+      <div className="md:hidden nav-blur-fade" />
+
       {/* ── Main Content ────────────────────────────────────────────────────── */}
       <main className="flex-1 flex flex-col min-w-0 mx-2 md:mx-0 z-10 pt-0 md:pt-3 pb-0 md:pb-4">
 
@@ -501,8 +504,8 @@ export default function Layout() {
             <div
               className={
                 location.pathname === '/add' || location.pathname === '/tracking'
-                  ? 'h-full flex flex-col pt-[calc(3.6rem+env(safe-area-inset-top,24px)+10px)] md:pt-0 pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))] md:pb-0'
-                  : 'min-h-full flex flex-col w-full pt-[calc(3.6rem+env(safe-area-inset-top,24px)+10px)] md:pt-0 pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))] md:pb-0'
+                  ? 'h-full flex flex-col pt-[4.1rem] md:pt-0 pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))] md:pb-0'
+                  : 'min-h-full flex flex-col w-full pt-[4.1rem] md:pt-0 pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))] md:pb-0'
               }
             >
               <Outlet />

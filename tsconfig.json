@@ -31,5 +31,6 @@
       "src/*": ["src/*"]
     }
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*"],
+  "exclude": ["src/utils/__tests__/**/*", "node_modules"]
 }

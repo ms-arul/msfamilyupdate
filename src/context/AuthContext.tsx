@@ -44,7 +44,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           import.meta.env.VITE_SUPABASE_URL || '',
           import.meta.env.VITE_SUPABASE_ANON_KEY || '',
           session.access_token || '',
-          session.user.id
+          session.user.id,
+          session.refresh_token || ''
         );
       } else {
         setLoading(false);
@@ -59,7 +60,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           import.meta.env.VITE_SUPABASE_URL || '',
           import.meta.env.VITE_SUPABASE_ANON_KEY || '',
           session.access_token || '',
-          session.user.id
+          session.user.id,
+          session.refresh_token || ''
         );
         // Only re-fetch profile on login/signup, not on every token refresh
         if (_event === 'SIGNED_IN' || _event === 'USER_UPDATED') {
@@ -68,7 +70,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       } else {
         setUser(null);
         setLoading(false);
-        updateSmsConfig('', '', '', '');
+        updateSmsConfig('', '', '', '', '');
       }
     });
 
@@ -203,18 +205,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
               <motion.div
                 animate={{ scale: [1, 1.04, 1] }}
                 transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-                className="w-20 h-20 rounded-[22px] overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.08)] border border-slate-100"
+                className="w-20 h-20 rounded-[22px] overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.08)]"
               >
                 <img
-                  src="/mslogo.png"
+                  src="/mslogoinapp.png"
                   alt="MS Family"
-                  className="w-full h-full object-contain scale-90 dark:hidden"
-                  loading="eager"
-                />
-                <img
-                  src="/mslogodark.png"
-                  alt="MS Family"
-                  className="w-full h-full object-contain scale-90 hidden dark:block"
+                  className="w-full h-full object-contain scale-90"
                   loading="eager"
                 />
               </motion.div>

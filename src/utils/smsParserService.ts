@@ -31,6 +31,15 @@ export interface SmsParsedRecord {
   debugNotes?: string[];
 }
 
+export let parserConfig = {
+  verbose: false,
+  relaxedMode: true,
+};
+
+export function setParserConfig(config: Partial<typeof parserConfig>) {
+  parserConfig = { ...parserConfig, ...config };
+}
+
 // ─── SENDER → BANK MAP ───────────────────────────────────────────────────────
 
 const BANK_SENDERS: Record<string, string> = {
@@ -117,7 +126,7 @@ const MERCHANT_CATEGORIES: Record<string, string> = {
   'zara': 'Shopping', 'levi': 'Shopping', 'nike': 'Shopping',
   'adidas': 'Shopping', 'puma': 'Shopping', 'woodland': 'Shopping',
   'bata': 'Shopping', 'payless': 'Shopping', 'snapdeal': 'Shopping',
-  'shopclues': 'Shopping', 'indiamart': 'Shopping', 'jiomart': 'Shopping',
+  'shopclues': 'Shopping', 'indiamart': 'Shopping',
   'tesco': 'Shopping', 'ikea': 'Shopping',
   // Travel & Transport
   'uber': 'Travel', 'ola': 'Travel', 'rapido': 'Travel', 'irctc': 'Travel',
@@ -224,7 +233,7 @@ const TYPED_SIGNALS: Array<{ pattern: RegExp; type: 'credit' | 'debit'; weight: 
 const NON_TRANSACTION_SIGNALS: RegExp[] = [
   /offer(ing)?/i, /discount/i, /get\s+\d+%\s+off/i,
   /click\s+here/i, /apply\s+now/i, /limited\s+time/i,
-  /win\s+up\s+to/i, /congratulations.*won/i,
+  /win\s+up\s+to/i, /congratulations?.*won/i,
   /otp\s+(is|:)/i, /one.?time.?password/i,
   /verify\s+your/i, /login\s+attempt/i,
 ];
@@ -247,17 +256,17 @@ function extractAmount(body: string): number | null {
   // Pattern set with contextual scores
   const patterns: Array<{ re: RegExp; score: number }> = [
     // Highest confidence: explicit Rs/INR prefix immediately before number
-    { re: /(?:rs\.?|inr|₹)\s*(\d{1,3}(?:,\d{2,3})*(?:\.\d{1,2})?)/gi, score: 10 },
+    { re: /(?:rs\.?|inr|₹)\s*(\d+(?:,\d{2,3})*(?:\.\d{1,2})?)/gi, score: 10 },
     // Number immediately after transaction verb
-    { re: /(?:debited|credited|spent|received|paid|withdrawn|deposited|transferred|deducted|charged)\s+(?:rs\.?|inr|₹)?\s*(\d{1,3}(?:,\d{2,3})*(?:\.\d{1,2})?)/gi, score: 9 },
+    { re: /(?:debited|credited|spent|received|paid|withdrawn|deposited|transferred|deducted|charged)\s+(?:rs\.?|inr|₹)?\s*(\d+(?:,\d{2,3})*(?:\.\d{1,2})?)/gi, score: 9 },
     // "amount of Rs X" pattern
-    { re: /amount\s+(?:of\s+)?(?:rs\.?|inr|₹)?\s*(\d{1,3}(?:,\d{2,3})*(?:\.\d{1,2})?)/gi, score: 9 },
+    { re: /amount\s+(?:of\s+)?(?:rs\.?|inr|₹)?\s*(\d+(?:,\d{2,3})*(?:\.\d{1,2})?)/gi, score: 9 },
     // "for Rs X" pattern
-    { re: /for\s+(?:rs\.?|inr|₹)\s*(\d{1,3}(?:,\d{2,3})*(?:\.\d{1,2})?)/gi, score: 8 },
+    { re: /for\s+(?:rs\.?|inr|₹)\s*(\d+(?:,\d{2,3})*(?:\.\d{1,2})?)/gi, score: 8 },
     // Number + Rs suffix
-    { re: /(\d{1,3}(?:,\d{2,3})*(?:\.\d{1,2})?)\s*(?:rs\.?|inr)/gi, score: 7 },
+    { re: /(\d+(?:,\d{2,3})*(?:\.\d{1,2})?)\s*(?:rs\.?|inr)/gi, score: 7 },
     // Any decimal number (fallback)
-    { re: /(\d{1,3}(?:,\d{2,3})*\.\d{2})\b/g, score: 4 },
+    { re: /(\d+(?:,\d{2,3})*\.\d{2})\b/g, score: 4 },
   ];
 
   for (const { re, score } of patterns) {
@@ -311,7 +320,7 @@ function extractTransactionType(body: string): { type: ParsedTransactionType; co
 function extractAccountLast4(body: string): string | null {
   const patterns = [
     // a/c no. xx1234 or acct: 1234
-    /(?:a\/c|acct|account|ac)[\s:]*(?:no\.?\s*)?[xX*#\-]+(\d{4})\b/i,
+    /(?:a\/c|acct|account|ac)[\s:]*(?:no\.?\s*)?[xX*#-]+(\d{4})\b/i,
     // a/c 12345678 → last 4
     /(?:a\/c|acct|account|ac)[\s:]*(?:no\.?\s*)?(\d{8,16})\b/i,
     // "ending 1234" or "ending with 1234"
@@ -342,8 +351,8 @@ function extractAccountLast4(body: string): string | null {
 function extractMerchant(body: string): string | null {
   // Strategy 1: "paid to / sent to / transferred to <NAME>"
   const paidToPatterns = [
-    /(?:paid\s+to|sent\s+to|payment\s+to)\s+([A-Za-z][\w\s&'.@,-]{1,35}?)(?:\s+(?:ref|Ref|on|upi|txn|vpa|if|amt|\d)|$)/i,
-    /(?:trf|txfr|transfer(?:red)?)\s+to\s+([A-Za-z][\w\s&'.@,-]{1,35}?)(?:\s+(?:ref|Ref|on|upi|txn|vpa|if|\d)|$)/i,
+    /(?:paid\s+to|sent\s+to|payment\s+to)\s+([A-Za-z][\w\s&'.@,-]{1,35}?)(?:[.\s]+(?:ref|Ref|on|upi|txn|vpa|if|amt|bal|balance|info|\d)|$)/i,
+    /(?:trf|txfr|transfer(?:red)?)\s+to\s+([A-Za-z][\w\s&'.@,-]{1,35}?)(?:[.\s]+(?:ref|Ref|on|upi|txn|vpa|if|bal|balance|info|\d)|$)/i,
   ];
   for (const pat of paidToPatterns) {
     const m = body.match(pat);
@@ -354,7 +363,7 @@ function extractMerchant(body: string): string | null {
   }
 
   // Strategy 2: VPA-based merchant (user@bank → extract user part)
-  const vpaMatch = body.match(/(?:vpa|upi\s*id)\s*[:\-]?\s*([\w.\-]+@[\w.]+)/i);
+  const vpaMatch = body.match(/(?:vpa|upi\s*id)\s*[:-]?\s*([\w.-]+@[\w.]+)/i);
   if (vpaMatch) {
     const vpa = vpaMatch[1].toLowerCase();
     const [handle] = vpa.split('@');
@@ -365,7 +374,7 @@ function extractMerchant(body: string): string | null {
   }
 
   // Strategy 3: "at <MERCHANT>" pattern (POS / card swipe)
-  const atPattern = /\bat\s+([A-Za-z][\w\s&'.,-]{2,35}?)(?:\s+(?:on|ref|Ref|upi|txn|vpa|card|a\/c|acct|inr|rs|₹|if|\d))/i;
+  const atPattern = /\bat\s+([A-Za-z][\w\s&'.,-]{2,35}?)(?:[.\s]+(?:on|ref|Ref|upi|txn|vpa|card|a\/c|acct|inr|rs|₹|if|bal|balance|info|\d))/i;
   const atMatch = body.match(atPattern);
   if (atMatch) {
     const cleaned = cleanMerchant(atMatch[1]);
@@ -373,7 +382,7 @@ function extractMerchant(body: string): string | null {
   }
 
   // Strategy 4: "received from <NAME>"
-  const fromPattern = /(?:received\s+from|from)\s+([A-Za-z][\w\s&'.@,-]{2,35}?)(?:\s+(?:on|ref|Ref|vpa|txn|if|\d)|$)/i;
+  const fromPattern = /(?:received\s+from|from)\s+([A-Za-z][\w\s&'.@,-]{2,35}?)(?:[.\s]+(?:on|ref|Ref|vpa|txn|if|bal|balance|info|\d)|$)/i;
   const fromMatch = body.match(fromPattern);
   if (fromMatch) {
     const cleaned = cleanMerchant(fromMatch[1]);
@@ -381,7 +390,7 @@ function extractMerchant(body: string): string | null {
   }
 
   // Strategy 5: "to <NAME> Ref" – short-form transfers
-  const toRefPattern = /\bto\s+([A-Za-z][\w\s&'.,-]{1,25}?)\s+(?:Ref|ref|on|txn)/i;
+  const toRefPattern = /\bto\s+([A-Za-z][\w\s&'.,-]{1,25}?)(?:[.\s]+(?:ref|Ref|on|upi|txn|vpa|if|amt|bal|balance|info|\d)|$)/i;
   const toRefMatch = body.match(toRefPattern);
   if (toRefMatch) {
     const cleaned = cleanMerchant(toRefMatch[1]);
@@ -412,10 +421,10 @@ const KNOWN_MERCHANTS = [
 ].sort((a, b) => b.length - a.length);
 
 function cleanMerchant(raw: string): string | null {
-  let m = raw.trim()
+  const m = raw.trim()
     .replace(/\s+/g, ' ')
     .replace(/[,.\s]+$/, '')
-    .replace(/^(the|a|an)\s+/i, '')
+    .replace(/^(the|a|an|merchant|m\/s|pymt to|payment to)\s+/i, '')
     .trim();
 
   if (m.length < 2 || m.length > 45) return null;
@@ -433,21 +442,21 @@ function cleanMerchant(raw: string): string | null {
 }
 
 function toTitleCase(str: string): string {
-  return str.replace(/\b\w/g, c => c.toUpperCase());
+  return str.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
 }
 
 // ─── REFERENCE NUMBER ─────────────────────────────────────────────────────────
 
 function extractReference(body: string): string | null {
   const patterns = [
-    /(?:ref(?:erence)?\s*(?:no\.?|#|number)?\s*[:\-]?\s*)(\w{6,22})/i,
-    /(?:txn\s*(?:id|no\.?|#)?\s*[:\-]?\s*)(\w{6,22})/i,
-    /(?:transaction\s*(?:id|no\.?)?\s*[:\-]?\s*)(\w{6,22})/i,
-    /(?:utr\s*(?:no\.?)?\s*[:\-]?\s*)(\w{6,22})/i,
-    /(?:rrn\s*[:\-]?\s*)(\d{6,20})/i,
-    /(?:upi\s*ref\s*(?:no\.?)?\s*[:\-]?\s*)(\d{6,20})/i,
-    /(?:imps\s*ref\s*[:\-]?\s*)(\d{6,20})/i,
-    /(?:neft\s*ref\s*[:\-]?\s*)(\w{6,22})/i,
+    /(?:ref(?:erence)?\s*(?:no\.?|#|number)?\s*[:-]?\s*)(\w{6,22})/i,
+    /(?:txn\s*(?:id|no\.?|#)?\s*[:-]?\s*)(\w{6,22})/i,
+    /(?:transaction\s*(?:id|no\.?)?\s*[:-]?\s*)(\w{6,22})/i,
+    /(?:utr\s*(?:no\.?)?\s*[:-]?\s*)(\w{6,22})/i,
+    /(?:rrn\s*[:-]?\s*)(\d{6,20})/i,
+    /(?:upi\s*ref\s*(?:no\.?)?\s*[:-]?\s*)(\d{6,20})/i,
+    /(?:imps\s*ref\s*[:-]?\s*)(\d{6,20})/i,
+    /(?:neft\s*ref\s*[:-]?\s*)(\w{6,22})/i,
   ];
 
   for (const pat of patterns) {
@@ -525,7 +534,7 @@ function detectBank(sender: string | undefined, body: string | undefined): strin
     }
 
     // 3. VPA domain-based detection
-    const vpaMatch = lower.match(/[\w.\-]+@([\w.]+)/);
+    const vpaMatch = lower.match(/[\w.-]+@([\w.]+)/);
     if (vpaMatch) {
       const domain = vpaMatch[1];
       for (const [d, bank] of Object.entries(UPI_DOMAIN_BANK)) {
@@ -572,6 +581,11 @@ export function suggestCategory(
 // ─── SPAM / NON-TRANSACTION FILTER ───────────────────────────────────────────
 
 function isLikelyNonTransaction(body: string): boolean {
+  // OTP and verification/security codes are definitely not transaction SMS
+  if (/\b(otp|one-time password|one time password|verification code|verification otp|tpin|security code|passcode)\b/i.test(body) ||
+      /dear customer, (your )?otp/i.test(body)) {
+    return true;
+  }
   let hitCount = 0;
   for (const re of NON_TRANSACTION_SIGNALS) {
     if (re.test(body)) hitCount++;
@@ -641,20 +655,34 @@ export function parseBankSms(
   // Pre-filter: likely promotional / OTP
   if (isLikelyNonTransaction(body)) {
     notes.push('Rejected: matched non-transaction signals');
+    if (parserConfig.verbose) {
+      console.log(`[SMS Parser Debug] Rejected ${sender}: matched non-transaction signals`);
+    }
     return null;
   }
 
   const amount = extractAmount(body);
   if (!amount || amount <= 0) {
     notes.push('Rejected: no valid amount found');
+    if (parserConfig.verbose) {
+      console.log(`[SMS Parser Debug] Rejected ${sender}: no valid amount found`);
+    }
     return null;
   }
   notes.push(`Amount: ${amount}`);
 
-  const typeResult = extractTransactionType(body);
+  let typeResult = extractTransactionType(body);
   if (!typeResult) {
-    notes.push('Rejected: could not determine transaction type');
-    return null;
+    if (parserConfig.relaxedMode) {
+      typeResult = { type: 'debit', confidence: 0.5 };
+      notes.push('Transaction type uncertain; defaulted to debit (relaxed mode)');
+    } else {
+      notes.push('Rejected: could not determine transaction type');
+      if (parserConfig.verbose) {
+        console.log(`[SMS Parser Debug] Rejected ${sender}: could not determine transaction type`);
+      }
+      return null;
+    }
   }
   notes.push(`Type: ${typeResult.type} (conf ${typeResult.confidence.toFixed(2)})`);
 
@@ -673,6 +701,10 @@ export function parseBankSms(
   if (balance !== null) notes.push(`Balance: ${balance}`);
   notes.push(`Category: ${category}`);
   notes.push(`Confidence: ${confidence}`);
+
+  if (parserConfig.verbose) {
+    console.log(`[SMS Parser Debug] Parsed successfully:`, notes.join(' | '));
+  }
 
   return {
     amount,
@@ -747,4 +779,4 @@ export async function smartParse(
   return regexResult; // best effort
 }
 
-export default { parseBankSms, parseWithAI, smartParse, isBankSms, suggestCategory };
+export default { parseBankSms, parseWithAI, smartParse, isBankSms, suggestCategory, parserConfig, setParserConfig };

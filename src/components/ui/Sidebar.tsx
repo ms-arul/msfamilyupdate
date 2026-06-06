@@ -104,7 +104,7 @@ export const DesktopSidebar = forwardRef<HTMLElement, DesktopSidebarProps>(({ us
       className="hidden md:flex md:w-[220px] lg:w-[260px] xl:w-[280px] transition-all duration-300 relative flex-col shrink-0 z-10"
     >
       {/* Glass panel with depth */}
-      <div className="absolute inset-0 bg-gradient-to-br from-white/95 via-white/90 to-white/95 dark:from-[#0e0e1a]/95 dark:via-[#12121f]/90 dark:to-[#0e0e1a]/95 backdrop-blur-xl rounded-2xl border border-white/20 dark:border-slate-700/20 shadow-2xl shadow-slate-200/50 dark:shadow-black/50 m-3" />
+      <div className="absolute inset-0 bg-gradient-to-br from-white/95 via-white/90 to-white/95 dark:from-[#050505]/95 dark:via-[#0a0a0a]/90 dark:to-[#050505]/95 backdrop-blur-xl rounded-2xl border border-white/20 dark:border-slate-800/20 shadow-2xl shadow-slate-200/50 dark:shadow-black/50 m-3" />
 
       {/* Floating gradient orb decoration */}
       <div className="absolute -top-20 -right-20 w-64 h-64 bg-gradient-to-br from-primary-500/20 to-secondary-500/20 rounded-full blur-3xl pointer-events-none" />
@@ -115,10 +115,9 @@ export const DesktopSidebar = forwardRef<HTMLElement, DesktopSidebarProps>(({ us
         {/* Logo section */}
         <div className="p-3 flex items-center gap-2 mb-1 mt-1">
           <div
-            className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-secondary-500 flex items-center justify-center shadow-lg shadow-primary-500/30 overflow-hidden"
+            className="w-10 h-10 rounded-xl flex items-center justify-center overflow-hidden"
           >
-            <img src="/mslogo.png" alt="MS Logo" className="w-full h-full object-contain scale-[1.15] dark:hidden" />
-            <img src="/mslogodark.png" alt="MS Logo" className="w-full h-full object-contain scale-[1.15] hidden dark:block" />
+            <img src="/mslogoinapp.png" alt="MS Logo" className="w-full h-full object-contain" />
           </div>
           <div className="flex flex-col items-center justify-center pt-1">
             <h1 className="text-2xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 dark:from-white dark:to-slate-300 bg-clip-text text-transparent leading-none mb-1">
@@ -147,7 +146,7 @@ export const DesktopSidebar = forwardRef<HTMLElement, DesktopSidebarProps>(({ us
           <motion.div
             whileHover={{ y: -2, scale: 1.02 }}
             transition={{ duration: 0.2 }}
-            className="relative p-3 rounded-xl bg-gradient-to-br from-slate-50 to-white dark:from-[#1a1a2e] dark:to-[#12121f] border border-slate-200/80 dark:border-slate-700/30 shadow-lg shadow-slate-200/50 dark:shadow-black/30 overflow-hidden group"
+            className="relative p-3 rounded-xl bg-gradient-to-br from-slate-50 to-white dark:from-[#0a0a0a] dark:to-[#111111] border border-slate-200/80 dark:border-slate-800/30 shadow-lg shadow-slate-200/50 dark:shadow-black/30 overflow-hidden group"
           >
             {/* Animated gradient overlay on hover */}
             <motion.div
@@ -227,7 +226,7 @@ export const MobileSidebar: React.FC<MobileSidebarProps> = ({ mobileOpen, setMob
             initial="hidden"
             animate="visible"
             exit="exit"
-            className="relative w-[280px] h-full bg-gradient-to-b from-slate-50 to-white dark:from-[#0e0e1a] dark:to-[#12121f] shadow-2xl"
+            className="relative w-[280px] h-full bg-gradient-to-b from-slate-50 to-white dark:from-[#050505] dark:to-[#0a0a0a] shadow-2xl"
             onClick={(e) => e.stopPropagation()}
             role="dialog"
             aria-label="Navigation menu"
@@ -243,10 +242,9 @@ export const MobileSidebar: React.FC<MobileSidebarProps> = ({ mobileOpen, setMob
                 className="flex items-center gap-3 px-4 pt-10 pb-4 mt-2"
               >
                 <div
-                  className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-secondary-500 flex items-center justify-center shadow-lg overflow-hidden"
+                  className="w-10 h-10 rounded-xl flex items-center justify-center overflow-hidden"
                 >
-                  <img src="/mslogo.png" alt="MS Logo" className="w-full h-full object-contain scale-[1.15] dark:hidden" />
-                  <img src="/mslogodark.png" alt="MS Logo" className="w-full h-full object-contain scale-[1.15] hidden dark:block" />
+                  <img src="/mslogoinapp.png" alt="MS Logo" className="w-full h-full object-contain" />
                 </div>
                 <div className="flex flex-col items-center justify-center pt-1">
                   <h1 className="text-2xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 dark:from-white dark:to-slate-300 bg-clip-text text-transparent leading-none mb-1">
@@ -262,7 +260,7 @@ export const MobileSidebar: React.FC<MobileSidebarProps> = ({ mobileOpen, setMob
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.1 }}
-                  className="mx-3 mb-2 p-2.5 rounded-xl bg-gradient-to-r from-white to-slate-50 dark:from-[#1a1a2e] dark:to-[#12121f] border border-slate-200 dark:border-slate-700/30 shadow-md dark:shadow-black/30"
+                  className="mx-3 mb-2 p-2.5 rounded-xl bg-gradient-to-r from-white to-slate-50 dark:from-[#0a0a0a] dark:to-[#111111] border border-slate-200 dark:border-slate-800/30 shadow-md dark:shadow-black/30"
                 >
                   <div className="flex items-center gap-3">
                     <div className="relative">

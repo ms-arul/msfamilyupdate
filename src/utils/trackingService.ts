@@ -104,25 +104,24 @@ export const requestLocationPermissions = async (): Promise<boolean> => {
   }
 };
 
-export const getCurrentLocation = (): Promise<GeolocationPosition | null> => {
-  return new Promise(async (resolve) => {
-    try {
-      const { Geolocation } = await import('@capacitor/geolocation');
-      const pos = await Geolocation.getCurrentPosition({ enableHighAccuracy: true, timeout: 15000 });
-      resolve(pos as any);
-      return;
-    } catch {}
+export const getCurrentLocation = async (): Promise<GeolocationPosition | null> => {
+  try {
+    const { Geolocation } = await import('@capacitor/geolocation');
+    const pos = await Geolocation.getCurrentPosition({ enableHighAccuracy: true, timeout: 15000 });
+    return pos as any;
+  } catch { /* empty */ }
 
-    if ('geolocation' in navigator) {
+  if ('geolocation' in navigator) {
+    return new Promise((resolve) => {
       navigator.geolocation.getCurrentPosition(
         (pos) => resolve(pos),
         () => resolve(null),
         { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
       );
-    } else {
-      resolve(null);
-    }
-  });
+    });
+  }
+
+  return null;
 };
 
 export const startBackgroundTracking = async (userId: string): Promise<void> => {

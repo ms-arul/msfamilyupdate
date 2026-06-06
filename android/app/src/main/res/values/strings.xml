@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">MS Family</string>
+    <string name="title_activity_main">MS Family</string>
+    <string name="package_name">com.msfamily.app</string>
+    <string name="custom_url_scheme">com.msfamily.app</string>
+</resources>

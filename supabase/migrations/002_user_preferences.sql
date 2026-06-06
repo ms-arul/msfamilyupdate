@@ -8,7 +8,7 @@
 -- ────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.user_preferences (
   user_id         uuid REFERENCES public.profiles(id) ON DELETE CASCADE PRIMARY KEY,
-  theme           text DEFAULT 'light' CHECK (theme IN ('light', 'dark', 'auto')),
+  theme           text DEFAULT 'light' CHECK (theme IN ('light', 'dark', 'auto', 'schedule')),
   language        text DEFAULT 'en' CHECK (language IN ('en', 'ta')),
   notif_enabled   boolean DEFAULT true,
   notif_sound     boolean DEFAULT true,
