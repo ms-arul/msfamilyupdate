@@ -10,7 +10,12 @@ const Transactions = React.lazy(() => import('./pages/Transactions'));
 const Loans = React.lazy(() => import('./pages/Loans'));
 const Analytics = React.lazy(() => import('./pages/Analytics'));
 const CalendarView = React.lazy(() => import('./pages/CalendarView'));
+const FamilyGroups = React.lazy(() => import('./pages/FamilyGroups'));
 const FamilyOverview = React.lazy(() => import('./pages/FamilyOverview'));
+const CreateFamily = React.lazy(() => import('./pages/CreateFamily'));
+const JoinFamily = React.lazy(() => import('./pages/JoinFamily'));
+const FamilyMembers = React.lazy(() => import('./pages/FamilyMembers'));
+const FamilyInvite = React.lazy(() => import('./pages/FamilyInvite'));
 const MyProofs = React.lazy(() => import('./pages/MyProofs'));
 const Notifications = React.lazy(() => import('./pages/Notifications'));
 const Login = React.lazy(() => import('./pages/Login'));
@@ -20,6 +25,7 @@ const Savings = React.lazy(() => import('./pages/Savings'));
 const LiveTracking = React.lazy(() => import('./pages/LiveTracking'));
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { FinanceProvider, useFinance } from './context/FinanceContext';
+import { FamilyProvider } from './context/FamilyContext';
 import { LanguageProvider } from './context/LanguageContext';
 import { CallProvider } from './context/CallContext';
 import { initTheme } from './utils/themeService';
@@ -377,6 +383,7 @@ function App() {
       <AuthProvider>
         <CallProvider>
         <FinanceProvider>
+        <FamilyProvider>
           <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
             <PushNotificationSetup />
             <NotificationInit />
@@ -407,6 +414,12 @@ function App() {
                   <Route path="analytics" element={<Analytics />} />
                   <Route path="calendar" element={<CalendarView />} />
                   <Route path="family" element={<FamilyOverview />} />
+                  <Route path="settings/family-setup" element={<FamilyGroups />} />
+                  <Route path="family/create" element={<CreateFamily />} />
+                  <Route path="family/join" element={<JoinFamily />} />
+                  <Route path="family/join/:code" element={<JoinFamily />} />
+                  <Route path="family/members" element={<FamilyMembers />} />
+                  <Route path="family/invite" element={<FamilyInvite />} />
                   <Route path="proofs" element={<MyProofs />} />
                   <Route path="notifications" element={<Notifications />} />
                   <Route path="settings" element={<Settings />} />
@@ -419,6 +432,7 @@ function App() {
             </MaintenanceGuard>
             </AppLockGuard>
           </Router>
+        </FamilyProvider>
         </FinanceProvider>
         </CallProvider>
       </AuthProvider>

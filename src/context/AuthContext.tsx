@@ -11,6 +11,8 @@ export interface FamilyUser {
   id: string;
   email?: string;
   name: string;
+  username?: string;
+  bio?: string;
   role: string;
   avatar: string;
 }
@@ -19,8 +21,9 @@ export interface AuthContextType {
   user: FamilyUser | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<any>;
-  signUp: (email: string, password: string, fullName: string) => Promise<any>;
+  signUp: (email: string, password: string, fullName: string, username?: string) => Promise<any>;
   logout: () => Promise<void>;
+  updateUsername: (username: string) => Promise<void>;
 }
 
 const [useAuth, AuthContextProvider] = createSafeContext<AuthContextType>('Auth');
@@ -95,6 +98,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           id: authUser.id,
           email: authUser.email,
           name: data.name,
+          username: data.username || undefined,
+          bio: data.bio || undefined,
           role: data.role,
           avatar: data.avatar,
         });
@@ -131,7 +136,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const signUp = async (email: string, password: string, fullName: string) => {
+  const signUp = async (email: string, password: string, fullName: string, username?: string) => {
     setLoading(true);
     const { data, error } = await supabase.auth.signUp({
       email,
@@ -139,12 +144,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       options: {
         data: {
           full_name: fullName,
+          username: username || undefined,
         },
       },
     });
     if (error) {
       setLoading(false);
       throw error;
+    }
+    // If username provided, update the profile record
+    if (username && data.user) {
+      await supabase.from('profiles').update({ username }).eq('id', data.user.id);
     }
     return data;
   };
@@ -166,6 +176,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
     setUser(null);
+  };
+
+  const updateUsername = async (username: string) => {
+    if (!user) throw new Error('Not authenticated');
+    const { error } = await supabase
+      .from('profiles')
+      .update({ username })
+      .eq('id', user.id);
+    if (error) throw error;
+    setUser(prev => prev ? { ...prev, username } : null);
   };
 
   useEffect(() => {
@@ -192,7 +212,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, [user]);
 
   return (
-    <AuthContextProvider value={{ user, login, signUp, logout, loading }}>
+    <AuthContextProvider value={{ user, login, signUp, logout, loading, updateUsername }}>
       {loading ? (
         <div className="absolute inset-0 z-50 bg-white dark:bg-[#0a0a14] flex flex-col items-center justify-center overflow-hidden transition-colors">
           {/* Apple-style splash screen */}

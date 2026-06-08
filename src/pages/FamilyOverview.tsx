@@ -2,6 +2,7 @@ import React, { useMemo, useCallback, useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
+import { useFamily } from '../context/FamilyContext';
 import { motion } from 'framer-motion';
 import { staggerContainer, staggerItem } from '../utils/animations';
 import {
@@ -89,52 +90,55 @@ const MemberCard: React.FC<MemberCardProps> = React.memo(
     return (
       <motion.div
         variants={item}
-        className="glass-panel p-5 flex flex-col relative group overflow-hidden"
-        whileHover={{ y: -2 }}
-        transition={{ duration: 0.2 }}
+        className="backdrop-blur-xl bg-white/[0.04] dark:bg-white/[0.02] border border-white/[0.1] dark:border-white/[0.05] p-5 flex flex-col relative group overflow-hidden rounded-[24px] shadow-[0_8px_32px_0_rgba(0,0,0,0.06),inset_0_1px_1px_0_rgba(255,255,255,0.12)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.3),inset_0_1px_1px_0_rgba(255,255,255,0.05)]"
+        whileHover={{ y: -4, scale: 1.01 }}
+        transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
       >
+        {/* Subtle blur decoration in the card itself */}
         <div
-          className={`absolute inset-0 bg-gradient-to-t ${gradient} opacity-0 group-hover:opacity-[0.06] transition-opacity duration-500 pointer-events-none`}
+          className={`absolute -right-10 -top-10 w-24 h-24 bg-gradient-to-br ${gradient} opacity-[0.05] group-hover:opacity-[0.12] rounded-full blur-xl transition-all duration-500 pointer-events-none`}
         />
 
         {/* Avatar */}
-        <div className="flex items-center gap-3 mb-4 relative z-10">
+        <div className="flex items-center gap-3.5 mb-4 relative z-10">
           <div
-            className={`w-12 h-12 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center shadow-lg`}
+            className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${gradient} flex items-center justify-center shadow-lg shadow-black/10`}
           >
-            <span className="text-slate-900 font-bold text-lg">
+            <span className="text-white font-bold text-lg">
               {member.name.charAt(0)}
             </span>
           </div>
           <div className="min-w-0 flex-1">
-            <h4 className="font-bold text-base truncate pr-2" title={member.name}>{member.name}</h4>
+            <h4 className="font-bold text-base text-slate-800 dark:text-slate-100 truncate pr-2" title={member.name}>
+              {member.name}
+            </h4>
             <div
-              className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border mt-0.5 ${badge.color}`}
+              className={`inline-flex items-center gap-1 text-[9px] font-bold tracking-wide uppercase px-2 py-0.5 rounded-full border mt-1 shadow-sm ${badge.color}`}
             >
-              <BadgeIcon size={10} /> {badge.label}
+              <BadgeIcon size={9} /> {badge.label}
             </div>
           </div>
         </div>
 
         {/* Stats */}
-        <div className="space-y-2.5 relative z-10 flex-1">
-          <div className="flex justify-between text-sm">
-            <span className="text-slate-600">{t('Income')}</span>
-            <span className="text-success-400 font-bold font-sans">
+        <div className="space-y-3 relative z-10 flex-1">
+          <div className="flex justify-between text-xs sm:text-sm">
+            <span className="text-slate-500 dark:text-slate-400">{t('Income')}</span>
+            <span className="text-emerald-500 dark:text-emerald-400 font-bold font-sans">
               ₹{member.income.toLocaleString()}
             </span>
           </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-slate-600">{t('Expense')}</span>
-            <span className="text-accent-400 font-bold font-sans">
+          <div className="flex justify-between text-xs sm:text-sm">
+            <span className="text-slate-500 dark:text-slate-400">{t('Expense')}</span>
+            <span className="text-rose-500 dark:text-rose-400 font-bold font-sans">
               ₹{member.expense.toLocaleString()}
             </span>
           </div>
-          <div className="h-px bg-border my-1" />
-          <div className="flex justify-between text-sm">
-            <span className="text-slate-600">{t('Net')}</span>
+          <div className="h-px bg-white/[0.08] dark:bg-white/[0.04] my-1" />
+          <div className="flex justify-between text-xs sm:text-sm">
+            <span className="text-slate-600 dark:text-slate-300 font-medium">{t('Net')}</span>
             <span
-              className={`font-bold font-sans ${net >= 0 ? 'text-success-400' : 'text-accent-400'
+              className={`font-bold font-sans ${net >= 0 ? 'text-emerald-500 dark:text-emerald-400' : 'text-rose-500 dark:text-rose-400'
                 }`}
             >
               {net >= 0 ? '+' : ''}₹{net.toLocaleString()}
@@ -144,17 +148,17 @@ const MemberCard: React.FC<MemberCardProps> = React.memo(
 
         {/* Spending Progress */}
         <div className="mt-4 relative z-10">
-          <div className="flex justify-between text-[10px] text-slate-600 mb-1">
-            <span>{t('Spend Ratio')}</span>
-            <span>{progress.toFixed(0)}%</span>
+          <div className="flex justify-between text-[10px] text-slate-500 dark:text-slate-400 mb-1.5">
+            <span className="font-medium">{t('Spend Ratio')}</span>
+            <span className="font-bold font-sans">{progress.toFixed(0)}%</span>
           </div>
-          <div className="h-1.5 bg-white rounded-full overflow-hidden">
+          <div className="h-1.5 bg-slate-200/50 dark:bg-slate-800/50 rounded-full overflow-hidden">
             <motion.div
               className={`h-full rounded-full ${progress > 80
-                  ? 'bg-accent-500'
-                  : progress > 50
-                    ? 'bg-warning-500'
-                    : 'bg-success-500'
+                ? 'bg-rose-500'
+                : progress > 50
+                  ? 'bg-amber-500'
+                  : 'bg-emerald-500'
                 }`}
               initial={{ width: 0 }}
               animate={{ width: `${progress}%` }}
@@ -163,8 +167,8 @@ const MemberCard: React.FC<MemberCardProps> = React.memo(
           </div>
         </div>
 
-        <div className="mt-3 text-center relative z-10">
-          <span className="text-[10px] text-gray-600">
+        <div className="mt-3.5 text-center relative z-10">
+          <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 tracking-wider uppercase">
             {member.txCount} transaction{member.txCount !== 1 ? 's' : ''}
           </span>
         </div>
@@ -204,34 +208,57 @@ interface ProfileData {
 export default function FamilyOverview() {
   const { user } = useAuth();
   const { t } = useLanguage();
+  const { family, members: familyMembers, loading: familyLoading } = useFamily();
   const [allTransactions, setAllTransactions] = useState<TransactionData[]>([]);
-  const [allProfiles, setAllProfiles] = useState<ProfileData[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  
+
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
 
   const handlePrevMonth = useCallback(() => setCurrentDate(p => subMonths(p, 1)), []);
   const handleNextMonth = useCallback(() => setCurrentDate(p => addMonths(p, 1)), []);
 
-  // Fetch ALL transactions and ALL profiles from Supabase (no member_id filter)
+  const allProfiles = useMemo<ProfileData[]>(() => {
+    if (familyMembers.length > 0) {
+      return familyMembers.map(m => ({
+        id: m.user_id,
+        name: m.profile?.name || 'Unknown',
+      }));
+    }
+    if (user) {
+      return [{
+        id: user.id,
+        name: user.name || user.email || 'Me',
+      }];
+    }
+    return [];
+  }, [familyMembers, user]);
+
+  // Fetch transactions only for the joined family members
   useEffect(() => {
+    if (familyLoading) return;
+
     async function fetchFamilyData() {
       setIsLoading(true);
       try {
-        const [txRes, profileRes] = await Promise.all([
-          supabase
-            .from('transactions')
-            .select(`*, profiles:profiles!transactions_member_id_fkey ( name )`)
-            .order('date', { ascending: false }),
-          supabase
-            .from('profiles')
-            .select('id, name')
-        ]);
+        const memberIds = familyMembers.length > 0
+          ? familyMembers.map(m => m.user_id)
+          : (user ? [user.id] : []);
 
-        if (txRes.error) throw txRes.error;
-        if (profileRes.error) throw profileRes.error;
+        if (memberIds.length === 0) {
+          setAllTransactions([]);
+          setIsLoading(false);
+          return;
+        }
 
-        const mapped = (txRes.data || []).map((tx: any) => ({
+        const { data, error } = await supabase
+          .from('transactions')
+          .select(`*, profiles:profiles!transactions_member_id_fkey ( name )`)
+          .in('member_id', memberIds)
+          .order('date', { ascending: false });
+
+        if (error) throw error;
+
+        const mapped = (data || []).map((tx: any) => ({
           id: tx.id,
           amount: Number(tx.amount),
           category: tx.category,
@@ -244,7 +271,6 @@ export default function FamilyOverview() {
         }));
 
         setAllTransactions(mapped);
-        setAllProfiles(profileRes.data || []);
       } catch (err) {
         console.error('Error fetching family data:', err);
       } finally {
@@ -252,7 +278,7 @@ export default function FamilyOverview() {
       }
     }
     fetchFamilyData();
-  }, [user]);
+  }, [user, familyMembers, familyLoading]);
 
   // Filter transactions for the selected month
   const filteredTransactions = useMemo(() => {
@@ -375,7 +401,7 @@ export default function FamilyOverview() {
   ];
 
   // Loading state
-  if (isLoading) {
+  if (isLoading || familyLoading) {
     return (
       <div className="space-y-6">
         <div className="glass-panel p-12 text-center">
@@ -402,81 +428,97 @@ export default function FamilyOverview() {
   }
 
   return (
-    <motion.div variants={container} initial="hidden" animate="show" className="space-y-6">
+    <motion.div variants={container} initial="hidden" animate="show" className="space-y-6 relative pb-12">
+      {/* Background Decorative Ambient Glow Spheres (Apple visionOS vibe) */}
+      <div className="absolute top-[-5%] left-[-5%] w-[45%] h-[45%] bg-gradient-to-br from-primary-500/10 to-indigo-500/0 rounded-full blur-[100px] pointer-events-none" />
+      <div className="absolute bottom-[-5%] right-[-5%] w-[45%] h-[45%] bg-gradient-to-tl from-secondary-500/10 to-cyan-500/0 rounded-full blur-[100px] pointer-events-none" />
+
       {/* Hero Banner */}
       <motion.div
         variants={item}
-        className="glass-panel p-6 sm:p-8 relative overflow-hidden"
+        className="backdrop-blur-xl bg-white/[0.04] dark:bg-white/[0.02] border border-white/[0.1] dark:border-white/[0.05] p-6 sm:p-8 relative overflow-hidden rounded-[32px] shadow-[0_8px_32px_0_rgba(0,0,0,0.06),inset_0_1px_1px_0_rgba(255,255,255,0.12)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.35),inset_0_1px_1px_0_rgba(255,255,255,0.05)]"
       >
-        <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-bl from-primary-500/20 to-transparent rounded-full blur-3xl -mr-32 -mt-32 pointer-events-none dark:hidden" />
-        <div className="absolute bottom-0 left-0 w-64 h-64 bg-gradient-to-tr from-secondary-500/20 to-transparent rounded-full blur-3xl -ml-32 -mb-32 pointer-events-none dark:hidden" />
+        {/* Ambient Glows Inside Banner */}
+        <div className="absolute top-0 right-0 w-80 h-80 bg-gradient-to-bl from-primary-500/15 to-transparent rounded-full blur-[90px] -mr-32 -mt-32 pointer-events-none" />
+        <div className="absolute bottom-0 left-0 w-80 h-80 bg-gradient-to-tr from-secondary-500/15 to-transparent rounded-full blur-[90px] -ml-32 -mb-32 pointer-events-none" />
 
         <div className="relative z-10">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-xs text-slate-600 font-bold uppercase tracking-widest">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest">
               {t('MS Family')}
             </p>
-            
-            {/* Month Toggle */}
-            <div className="flex items-center gap-2 sm:gap-3 bg-white/50 backdrop-blur-md px-2 sm:px-3 py-1.5 rounded-full border border-white/50 shadow-sm">
-              <button 
+
+            {/* Month Toggle Capsule */}
+            <div className="flex items-center gap-1.5 bg-slate-200/40 dark:bg-white/[0.04] backdrop-blur-md px-2.5 py-1 rounded-full border border-slate-300/40 dark:border-white/[0.06] shadow-sm">
+              <button
                 onClick={handlePrevMonth}
-                className="p-1 rounded-full hover:bg-white text-slate-600 transition-colors"
+                className="p-1.5 rounded-full hover:bg-slate-300/50 dark:hover:bg-white/[0.06] text-slate-600 dark:text-slate-300 transition-colors"
                 aria-label="Previous Month"
               >
-                <ChevronLeft size={16} />
+                <ChevronLeft size={14} />
               </button>
-              <span className="text-xs sm:text-sm font-bold text-slate-800 min-w-[90px] sm:min-w-[110px] text-center font-sans tracking-wide">
+              <span className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100 min-w-[90px] sm:min-w-[110px] text-center font-sans tracking-wide">
                 {format(currentDate, 'MMMM yyyy')}
               </span>
-              <button 
+              <button
                 onClick={handleNextMonth}
                 disabled={isSameMonth(currentDate, new Date())}
-                className={`p-1 rounded-full transition-colors ${
-                  isSameMonth(currentDate, new Date())
-                    ? 'text-slate-300 cursor-not-allowed'
-                    : 'hover:bg-white text-slate-600'
-                }`}
+                className={`p-1.5 rounded-full transition-colors ${isSameMonth(currentDate, new Date())
+                    ? 'text-slate-300 dark:text-slate-700 cursor-not-allowed'
+                    : 'hover:bg-slate-300/50 dark:hover:bg-white/[0.06] text-slate-600 dark:text-slate-300'
+                  }`}
                 aria-label="Next Month"
               >
-                <ChevronRight size={16} />
+                <ChevronRight size={14} />
               </button>
             </div>
           </div>
-          <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight">
+          <h2 className="text-3xl sm:text-4xl font-black tracking-tight text-slate-900 dark:text-white">
             {t('Family Ecosystem')}
           </h2>
-          <p className="text-slate-500 mt-2 text-sm">
-            {t('Your family\'s combined financial health at a glance')}
+          <p className="text-slate-500 dark:text-slate-400 mt-2 text-sm">
+            {t("Your family's combined financial health at a glance")}
           </p>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4 mt-5">
-            <div className="p-3 sm:p-4 bg-white/60 backdrop-blur-sm rounded-xl flex items-center justify-between border border-white/50 shadow-sm">
-              <p className="text-xs text-slate-600 font-semibold uppercase tracking-wider">
-                {t('Net Savings')}
-              </p>
-              <p
-                className={`text-xl sm:text-2xl font-extrabold font-sans ${balance >= 0 ? 'text-success-500' : 'text-accent-500'
-                  }`}
-              >
-                ₹{balance.toLocaleString()}
-              </p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 sm:gap-4 mt-6">
+            <div className="p-4 bg-slate-100/50 dark:bg-white/[0.03] backdrop-blur-md rounded-2xl flex items-center justify-between border border-slate-200/50 dark:border-white/[0.04] shadow-sm relative group overflow-hidden">
+              <div>
+                <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider">
+                  {t('Net Savings')}
+                </p>
+                <p className={`text-xl sm:text-2xl font-extrabold font-sans mt-1 ${balance >= 0 ? 'text-emerald-500 dark:text-emerald-400' : 'text-rose-500 dark:text-rose-400'}`}>
+                  ₹{balance.toLocaleString()}
+                </p>
+              </div>
+              <div className={`p-2.5 rounded-xl ${balance >= 0 ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'}`}>
+                <Award size={18} />
+              </div>
             </div>
-            <div className="p-3 sm:p-4 bg-white/60 backdrop-blur-sm rounded-xl flex items-center justify-between border border-white/50 shadow-sm">
-              <p className="text-xs text-slate-600 font-semibold uppercase tracking-wider">
-                {t('Total In')}
-              </p>
-              <p className="text-xl sm:text-2xl font-extrabold font-sans text-success-500 truncate">
-                ₹{totalIncome.toLocaleString()}
-              </p>
+            <div className="p-4 bg-slate-100/50 dark:bg-white/[0.03] backdrop-blur-md rounded-2xl flex items-center justify-between border border-slate-200/50 dark:border-white/[0.04] shadow-sm relative group overflow-hidden">
+              <div>
+                <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider">
+                  {t('Total In')}
+                </p>
+                <p className="text-xl sm:text-2xl font-extrabold font-sans text-emerald-500 dark:text-emerald-400 mt-1">
+                  ₹{totalIncome.toLocaleString()}
+                </p>
+              </div>
+              <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-500">
+                <Zap size={18} />
+              </div>
             </div>
-            <div className="p-3 sm:p-4 bg-white/60 backdrop-blur-sm rounded-xl flex items-center justify-between border border-white/50 shadow-sm">
-              <p className="text-xs text-slate-600 font-semibold uppercase tracking-wider">
-                {t('Total Out')}
-              </p>
-              <p className="text-xl sm:text-2xl font-extrabold font-sans text-accent-500 truncate">
-                ₹{totalExpense.toLocaleString()}
-              </p>
+            <div className="p-4 bg-slate-100/50 dark:bg-white/[0.03] backdrop-blur-md rounded-2xl flex items-center justify-between border border-slate-200/50 dark:border-white/[0.04] shadow-sm relative group overflow-hidden">
+              <div>
+                <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider">
+                  {t('Total Out')}
+                </p>
+                <p className="text-xl sm:text-2xl font-extrabold font-sans text-rose-500 dark:text-rose-400 mt-1">
+                  ₹{totalExpense.toLocaleString()}
+                </p>
+              </div>
+              <div className="p-2.5 rounded-xl bg-rose-500/10 text-rose-500">
+                <Flame size={18} />
+              </div>
             </div>
           </div>
         </div>
@@ -484,84 +526,96 @@ export default function FamilyOverview() {
 
       {/* Top Performers */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <motion.div variants={item} className="glass-panel p-5 relative overflow-hidden">
-          <div className="flex items-center gap-2 mb-3">
-            <Award size={16} className="text-success-400" />
-            <p className="text-xs text-slate-600 font-bold uppercase tracking-wider">
+        <motion.div
+          variants={item}
+          className="backdrop-blur-xl bg-white/[0.04] dark:bg-white/[0.02] border border-white/[0.1] dark:border-white/[0.05] p-5 relative overflow-hidden rounded-[24px] shadow-[inset_0_1px_1px_0_rgba(255,255,255,0.12)] dark:shadow-[inset_0_1px_1px_0_rgba(255,255,255,0.05)]"
+        >
+          <div className="flex items-center gap-2 mb-3.5">
+            <Award size={15} className="text-emerald-500 dark:text-emerald-400" />
+            <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider">
               {t('Top Earner')}
             </p>
           </div>
           {topEarner ? (
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-success-500/15 flex items-center justify-center border border-success-500/30 shrink-0">
-                <Crown size={18} className="text-success-500" />
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 shrink-0 shadow-sm">
+                <Crown size={18} className="text-emerald-500" />
               </div>
               <div className="flex-1 flex justify-between items-center min-w-0">
-                <p className="font-bold text-slate-800 truncate pr-2" title={t(topEarner.name)}>{t(topEarner.name)}</p>
-                <p className="text-sm font-sans text-success-500 font-bold shrink-0">
+                <p className="font-bold text-slate-800 dark:text-slate-200 truncate pr-2" title={t(topEarner.name)}>{t(topEarner.name)}</p>
+                <p className="text-sm font-bold font-sans text-emerald-500 dark:text-emerald-400 shrink-0">
                   ₹{topEarner.income.toLocaleString()}
                 </p>
               </div>
             </div>
           ) : (
-            <p className="text-slate-600 text-sm">{t('No data')}</p>
+            <p className="text-slate-400 dark:text-slate-500 text-xs font-medium">{t('No data')}</p>
           )}
         </motion.div>
 
-        <motion.div variants={item} className="glass-panel p-5 relative overflow-hidden">
-          <div className="flex items-center gap-2 mb-3">
-            <Flame size={16} className="text-accent-400" />
-            <p className="text-xs text-slate-600 font-bold uppercase tracking-wider">
+        <motion.div
+          variants={item}
+          className="backdrop-blur-xl bg-white/[0.04] dark:bg-white/[0.02] border border-white/[0.1] dark:border-white/[0.05] p-5 relative overflow-hidden rounded-[24px] shadow-[inset_0_1px_1px_0_rgba(255,255,255,0.12)] dark:shadow-[inset_0_1px_1px_0_rgba(255,255,255,0.05)]"
+        >
+          <div className="flex items-center gap-2 mb-3.5">
+            <Flame size={15} className="text-rose-500 dark:text-rose-400" />
+            <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider">
               {t('Top Spender')}
             </p>
           </div>
           {topSpender ? (
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-accent-500/15 flex items-center justify-center border border-accent-500/30 shrink-0">
-                <Flame size={18} className="text-accent-500" />
+              <div className="w-10 h-10 rounded-xl bg-rose-500/10 flex items-center justify-center border border-rose-500/20 shrink-0 shadow-sm">
+                <Flame size={18} className="text-rose-500" />
               </div>
               <div className="flex-1 flex justify-between items-center min-w-0">
-                <p className="font-bold text-slate-800 truncate pr-2">{t(topSpender.name)}</p>
-                <p className="text-sm font-sans text-accent-500 font-bold shrink-0">
+                <p className="font-bold text-slate-800 dark:text-slate-200 truncate pr-2">{t(topSpender.name)}</p>
+                <p className="text-sm font-bold font-sans text-rose-500 dark:text-rose-400 shrink-0">
                   ₹{topSpender.expense.toLocaleString()}
                 </p>
               </div>
             </div>
           ) : (
-            <p className="text-slate-600 text-sm">{t('No data')}</p>
+            <p className="text-slate-400 dark:text-slate-500 text-xs font-medium">{t('No data')}</p>
           )}
         </motion.div>
 
-        <motion.div variants={item} className="glass-panel p-5 relative overflow-hidden">
-          <div className="flex items-center gap-2 mb-3">
-            <Shield size={16} className="text-primary-400" />
-            <p className="text-xs text-slate-600 font-bold uppercase tracking-wider">
+        <motion.div
+          variants={item}
+          className="backdrop-blur-xl bg-white/[0.04] dark:bg-white/[0.02] border border-white/[0.1] dark:border-white/[0.05] p-5 relative overflow-hidden rounded-[24px] shadow-[inset_0_1px_1px_0_rgba(255,255,255,0.12)] dark:shadow-[inset_0_1px_1px_0_rgba(255,255,255,0.05)]"
+        >
+          <div className="flex items-center gap-2 mb-3.5">
+            <Shield size={15} className="text-primary-500 dark:text-primary-400" />
+            <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider">
               {t('Best Saver')}
             </p>
           </div>
           {topSaver ? (
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-primary-500/15 flex items-center justify-center border border-primary-500/30 shrink-0">
+              <div className="w-10 h-10 rounded-xl bg-primary-500/10 flex items-center justify-center border border-primary-500/20 shrink-0 shadow-sm">
                 <Shield size={18} className="text-primary-500" />
               </div>
               <div className="flex-1 flex justify-between items-center min-w-0">
-                <p className="font-bold text-slate-800 truncate pr-2">{t(topSaver.name)}</p>
-                <p className="text-sm font-sans text-primary-500 font-bold shrink-0">
+                <p className="font-bold text-slate-800 dark:text-slate-200 truncate pr-2">{t(topSaver.name)}</p>
+                <p className="text-sm font-bold font-sans text-primary-500 dark:text-primary-400 shrink-0">
                   ₹{(topSaver.income - topSaver.expense).toLocaleString()}
                 </p>
               </div>
             </div>
           ) : (
-            <p className="text-slate-600 text-sm">{t('No data')}</p>
+            <p className="text-slate-400 dark:text-slate-500 text-xs font-medium">{t('No data')}</p>
           )}
         </motion.div>
       </div>
 
       {/* Comparison Chart */}
       {comparisonData.length > 0 && (
-        <motion.div variants={item} className="glass-panel p-6">
-          <h3 className="text-base font-bold mb-6 flex items-center gap-2">
-            <div className="w-1.5 h-5 rounded-full bg-gradient-to-b from-primary-400 to-secondary-400" />
+        <motion.div
+          variants={item}
+          className="backdrop-blur-xl bg-white/[0.04] dark:bg-white/[0.02] border border-white/[0.1] dark:border-white/[0.05] p-6 relative overflow-hidden rounded-[28px] shadow-[0_8px_32px_0_rgba(0,0,0,0.06),inset_0_1px_1px_0_rgba(255,255,255,0.12)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.3),inset_0_1px_1px_0_rgba(255,255,255,0.05)]"
+        >
+          <h3 className="text-base font-bold mb-6 flex items-center gap-2 text-slate-800 dark:text-slate-100">
+            <div className="w-1.5 h-5 rounded-full bg-gradient-to-b from-primary-400 to-secondary-400 shadow-sm" />
             {t('Member Comparison')}
           </h3>
           <div className="h-64">
@@ -619,19 +673,19 @@ export default function FamilyOverview() {
             </SafeChartContainer>
           </div>
           <div className="flex items-center gap-6 mt-4 justify-center">
-            <div className="flex items-center gap-2 text-xs text-slate-500">
-              <div className="w-3 h-1.5 rounded-full bg-success-500" /> {t('Income')}
+            <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+              <div className="w-3 h-1.5 rounded-full bg-emerald-500" /> {t('Income')}
             </div>
-            <div className="flex items-center gap-2 text-xs text-slate-500">
-              <div className="w-3 h-1.5 rounded-full bg-accent-500" /> {t('Expense')}
+            <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+              <div className="w-3 h-1.5 rounded-full bg-rose-500" /> {t('Expense')}
             </div>
           </div>
         </motion.div>
       )}
 
       {/* Member Profiles */}
-      <div>
-        <h3 className="text-lg font-bold mb-4">{t('Member Profiles')}</h3>
+      <div className="space-y-4">
+        <h3 className="text-lg font-bold text-slate-900 dark:text-white px-1">{t('Member Profiles')}</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {members.map((member, idx) => {
             const badge = getBadge(member);
@@ -658,10 +712,13 @@ export default function FamilyOverview() {
 
       {/* Family Insights Footer (optional) */}
       {members.length > 1 && (
-        <motion.div variants={item} className="glass-panel p-4 bg-primary-500/5 border-primary-500/20">
+        <motion.div
+          variants={item}
+          className="backdrop-blur-xl bg-primary-500/[0.04] border border-primary-500/20 p-4 rounded-2xl shadow-[inset_0_1px_1px_0_rgba(255,255,255,0.05)]"
+        >
           <div className="flex items-center gap-3 text-sm">
-            <Award size={18} className="text-primary-400" />
-            <span className="text-slate-600">
+            <Award size={18} className="text-primary-500 dark:text-primary-400" />
+            <span className="text-slate-600 dark:text-slate-300 font-medium">
               💡 Insight: {t(topSaver?.name)} is leading in savings! Encourage others to follow.
             </span>
           </div>

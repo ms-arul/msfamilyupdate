@@ -64,6 +64,7 @@ public class MainActivity extends BridgeActivity {
         // Register custom plugins
         registerPlugin(BiometricAuthPlugin.class);
         registerPlugin(MicPermissionPlugin.class);
+        registerPlugin(CameraPermissionPlugin.class);
         registerPlugin(SmsReaderPlugin.class);
         registerPlugin(LocationServicePlugin.class);
         registerPlugin(TransactionCachePlugin.class);

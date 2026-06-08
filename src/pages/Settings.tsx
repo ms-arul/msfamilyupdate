@@ -5,9 +5,10 @@ import {
   Database, LogOut, Smartphone, Trash2, Download, RefreshCw,
   Volume2, VolumeX, Clock, Info, X, Pencil, Save, CheckCircle2,
   Cloud, CloudOff, Loader2, Fingerprint, Lock, ExternalLink,
-  MessageSquare, Zap, Check, AlertCircle, Camera
+  MessageSquare, Zap, Check, AlertCircle, Camera, Users, ChevronRight
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useFamily } from '../context/FamilyContext';
 import Cropper, { Area } from 'react-easy-crop';
 import getCroppedImg from '../utils/cropImage';
 import { compressForAvatar } from '../utils/imageCompressor';
@@ -244,6 +245,7 @@ const Toast: React.FC<ToastProps> = ({ message, visible, icon: ToastIcon, syncSt
 // ─── Main Component ───────────────────────────────────────
 export default function Settings() {
   const { user, logout } = useAuth();
+  const { family } = useFamily();
   const { language, setLanguage, t } = useLanguage();
   const navigate = useNavigate();
   const [theme, setTheme] = useState(getStoredTheme());
@@ -777,6 +779,24 @@ export default function Settings() {
                 <span className="text-[12px] text-slate-400 dark:text-slate-500">{t('App Version')}</span>
                 <span className="text-[12px] font-mono text-slate-500 dark:text-slate-400">1.0.0</span>
               </div>
+            </SettingCard>
+          </motion.section>
+
+          {/* ════ FAMILY SETUP ════ */}
+          <motion.section variants={item}>
+            <SectionHeader title={t('Family Setup')} />
+            <SettingCard>
+              <SettingRow
+                icon={Users}
+                iconBg="rgba(124,58,237,0.12)"
+                iconColor="#7C3AED"
+                title={t('Manage Family')}
+                subtitle={family ? t('Members, invites, and family code') : t('Create or join a family group')}
+                last
+                onPress={() => navigate('/settings/family-setup')}
+              >
+                <ChevronRight size={16} className="text-slate-400" />
+              </SettingRow>
             </SettingCard>
           </motion.section>
 

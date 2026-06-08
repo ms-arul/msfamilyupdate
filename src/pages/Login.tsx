@@ -13,6 +13,7 @@ import {
   Shield,
   X,
   Loader2,
+  AtSign,
 } from 'lucide-react';
 import { LucideIcon } from 'lucide-react';
 import { hashPin, decryptPassword } from '../utils/cryptoHelper';
@@ -185,6 +186,10 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [fullName, setFullName] = useState('');
+  const [username, setUsername] = useState('');
+  const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
+  const [usernameChecking, setUsernameChecking] = useState(false);
+  const usernameDebounceRef = useRef<ReturnType<typeof setTimeout>>();
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -244,7 +249,11 @@ export default function Login() {
     setError('');
     setPassword('');
     setConfirmPassword('');
-    if (!isLogin) setFullName('');
+    if (!isLogin) {
+      setFullName('');
+      setUsername('');
+      setUsernameAvailable(null);
+    }
     setAcceptTerms(false);
   }, [isLogin]);
 
@@ -257,6 +266,10 @@ export default function Login() {
     if (!isLogin) {
       if (fullName.trim().length < 2)
         return 'Full name must be at least 2 characters';
+      if (username.trim().length > 0 && !/^[a-zA-Z0-9_]{3,20}$/.test(username.trim()))
+        return 'Username must be 3-20 characters (letters, numbers, underscores)';
+      if (username.trim() && usernameAvailable === false)
+        return 'This username is already taken';
       if (password.length < 6)
         return 'Password must be at least 6 characters';
       if (password !== confirmPassword)
@@ -265,7 +278,7 @@ export default function Login() {
         return 'You must accept the terms to continue';
     }
     return null;
-  }, [email, password, confirmPassword, fullName, isLogin, acceptTerms]);
+  }, [email, password, confirmPassword, fullName, username, usernameAvailable, isLogin, acceptTerms]);
 
   const handleVerifyPin = useCallback(async (enteredPin: string) => {
     setLoading(true);
@@ -362,7 +375,7 @@ export default function Login() {
             localStorage.removeItem('rememberedEmail');
           }
         } else {
-          await signUp(email, password, fullName.trim());
+          await signUp(email, password, fullName.trim(), username.trim() || undefined);
           localStorage.removeItem('rememberedEmail');
         }
       } catch (err: any) {
@@ -680,6 +693,83 @@ export default function Login() {
                         autoComplete="name"
                       />
                     </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Username (Signup only) */}
+              <AnimatePresence initial={false}>
+                {!isLogin && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="relative overflow-hidden"
+                  >
+                    <div className="relative">
+                      <AtSign
+                        className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-600 z-10"
+                        size={18}
+                        aria-hidden="true"
+                      />
+                      <input
+                        type="text"
+                        value={username}
+                        onChange={(e) => {
+                          const val = e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '');
+                          setUsername(val);
+                          setUsernameAvailable(null);
+                          if (usernameDebounceRef.current) clearTimeout(usernameDebounceRef.current);
+                          if (val.length >= 3) {
+                            setUsernameChecking(true);
+                            usernameDebounceRef.current = setTimeout(async () => {
+                              try {
+                                const { data } = await supabase
+                                  .from('profiles')
+                                  .select('id')
+                                  .eq('username', val)
+                                  .maybeSingle();
+                                setUsernameAvailable(!data);
+                              } catch {
+                                setUsernameAvailable(null);
+                              } finally {
+                                setUsernameChecking(false);
+                              }
+                            }, 500);
+                          } else {
+                            setUsernameChecking(false);
+                          }
+                        }}
+                        placeholder={t('Username (optional, e.g. arulprakash)')}
+                        className="input-field !pr-10"
+                        aria-label="Username"
+                        autoComplete="username"
+                        maxLength={20}
+                      />
+                      {/* Availability indicator */}
+                      {username.length >= 3 && (
+                        <div className="absolute right-3.5 top-1/2 -translate-y-1/2 z-10">
+                          {usernameChecking ? (
+                            <Loader2 size={14} className="animate-spin text-slate-400" />
+                          ) : usernameAvailable === true ? (
+                            <div className="w-4 h-4 rounded-full bg-green-500 flex items-center justify-center">
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+                            </div>
+                          ) : usernameAvailable === false ? (
+                            <div className="w-4 h-4 rounded-full bg-red-500 flex items-center justify-center">
+                              <X size={10} strokeWidth={3} className="text-white" />
+                            </div>
+                          ) : null}
+                        </div>
+                      )}
+                    </div>
+                    {username.length >= 3 && usernameAvailable === true && (
+                      <p className="text-[10px] text-green-500 mt-0.5 pl-1">{t('Username available!')}</p>
+                    )}
+                    {username.length >= 3 && usernameAvailable === false && (
+                      <p className="text-[10px] text-red-400 mt-0.5 pl-1">{t('Username already taken')}</p>
+                    )}
                   </motion.div>
                 )}
               </AnimatePresence>

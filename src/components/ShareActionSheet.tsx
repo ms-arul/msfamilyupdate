@@ -48,6 +48,9 @@ const ShareActionSheet: React.FC = () => {
           navigate('/proofs');
         } else if (host === 'loans') {
           navigate('/loans');
+        } else if (host === 'family') {
+          const pathname = urlObj.pathname; // "/join/TOKEN"
+          navigate(`/family${pathname}`);
         }
       } catch (err) {
         console.warn('Failed to parse appUrlOpen URL:', err);
