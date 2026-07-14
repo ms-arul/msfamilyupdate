@@ -1,19 +1,24 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LayoutDashboard, Users, Bell, ShieldAlert, Settings } from 'lucide-react';
+import { LayoutDashboard, Users, Bell, ShieldAlert, Settings, CreditCard } from 'lucide-react';
 import AdminDashboard from '../components/admin/AdminDashboard';
 import UserManagement from '../components/admin/UserManagement';
 import AdminNotifications from '../components/admin/AdminNotifications';
 import SystemSettings from '../components/admin/SystemSettings';
+import { AdminMonetizationPanel } from './AdminMonetization';
 import { useLanguage } from '../context/LanguageContext';
+import { useSearchParams } from 'react-router-dom';
 
 const AdminPanel: React.FC = () => {
   const { t } = useLanguage();
-  const [activeTab, setActiveTab] = useState<string>('dashboard');
+  const [searchParams] = useSearchParams();
+  const initialTab = searchParams.get('tab') || 'dashboard';
+  const [activeTab, setActiveTab] = useState<string>(initialTab);
 
   const tabs = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'users', label: 'Users', icon: Users },
+    { id: 'billing', label: 'Billing', icon: CreditCard },
     { id: 'notifications', label: 'Notifications', icon: Bell },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
@@ -74,6 +79,7 @@ const AdminPanel: React.FC = () => {
           >
             {activeTab === 'dashboard' && <AdminDashboard />}
             {activeTab === 'users' && <UserManagement />}
+            {activeTab === 'billing' && <AdminMonetizationPanel />}
             {activeTab === 'notifications' && <AdminNotifications />}
             {activeTab === 'settings' && <SystemSettings />}
           </motion.div>

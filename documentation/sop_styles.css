@@ -1,0 +1,632 @@
+/* ============================================================================
+   MS Family — SOP Manual Design System Stylesheet
+   Designed for Premium, Print-Ready A4 PDFs printed from Headless Chrome
+   ============================================================================ */
+
+/* --- Import Fonts --- */
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700;800;900&family=Fira+Code:wght@400;500;600&display=swap');
+
+/* --- Page Core & Layout Rules --- */
+@page {
+    size: A4;
+    margin: 28mm 20mm 28mm 20mm;
+}
+
+@page :first {
+    margin: 0; /* Hides running headers/footers on the cover page */
+}
+
+/* --- Base Styling --- */
+html, body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 10pt;
+    line-height: 1.625;
+    color: #334155; /* Slate 700 */
+    background-color: #ffffff;
+    margin: 0;
+    padding: 0;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+}
+
+.page-break {
+    page-break-before: always;
+    break-before: page;
+}
+
+.no-break {
+    page-break-inside: avoid;
+    break-inside: avoid;
+}
+
+/* --- Typography & Spacing --- */
+h1, h2, h3, h4, h5, h6 {
+    font-family: 'IBM Plex Sans', sans-serif;
+    color: #0b1530; /* Deep Navy */
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-top: 24px;
+    margin-bottom: 12px;
+    page-break-after: avoid;
+    break-after: avoid;
+}
+
+/* Section Header Styles */
+.chapter-header {
+    margin-bottom: 30px;
+    border-bottom: 2px solid #e2e8f0;
+    padding-bottom: 15px;
+    page-break-inside: avoid;
+    break-inside: avoid;
+}
+
+.chapter-number-badge {
+    display: inline-block;
+    font-size: 9pt;
+    font-weight: 700;
+    color: #4f46e5; /* Indigo */
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-bottom: 6px;
+}
+
+h1 {
+    font-size: 24pt;
+    font-weight: 800;
+    margin-top: 0;
+    margin-bottom: 8px;
+    color: #0b1530;
+    line-height: 1.15;
+}
+
+.chapter-subtitle {
+    font-size: 11pt;
+    color: #64748b; /* Slate 500 */
+    line-height: 1.5;
+    margin-bottom: 15px;
+    font-weight: 400;
+}
+
+.chapter-summary-box {
+    background-color: #f8fafc;
+    border-left: 4px solid #0b1530;
+    padding: 12px 18px;
+    margin: 15px 0 25px 0;
+    font-size: 9.5pt;
+    color: #475569;
+    border-radius: 0 8px 8px 0;
+}
+
+h2 {
+    font-size: 15pt;
+    font-weight: 700;
+    border-bottom: 1px solid #f1f5f9;
+    padding-bottom: 6px;
+    margin-top: 30px;
+}
+
+h3 {
+    font-size: 12pt;
+    font-weight: 600;
+    color: #4f46e5; /* Indigo */
+    margin-top: 24px;
+}
+
+h4 {
+    font-size: 10.5pt;
+    font-weight: 600;
+    margin-top: 18px;
+}
+
+p {
+    margin-top: 0;
+    margin-bottom: 12px;
+    text-align: justify;
+    color: #334155;
+}
+
+strong {
+    color: #0f172a;
+    font-weight: 600;
+}
+
+/* --- Subtle Watermark --- */
+.watermark-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -1000;
+    pointer-events: none;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+}
+
+.watermark-text {
+    font-family: 'Inter', sans-serif;
+    font-size: 44pt;
+    font-weight: 900;
+    color: rgba(226, 232, 240, 0.14); /* Low opacity Slate 200 */
+    text-transform: uppercase;
+    letter-spacing: 10px;
+    transform: rotate(-35deg);
+    white-space: nowrap;
+    user-select: none;
+}
+
+/* --- Cover Page Design (Premium hand-book feel) --- */
+.cover-page {
+    width: 210mm;
+    height: 297mm;
+    box-sizing: border-box;
+    padding: 30mm 20mm 20mm 20mm;
+    background-color: #0b1530; /* Deep Navy primary background */
+    background-image: radial-gradient(at 0% 0%, rgba(79, 70, 229, 0.22) 0px, transparent 55%),
+                      radial-gradient(at 100% 0%, rgba(16, 185, 129, 0.12) 0px, transparent 45%),
+                      linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+                      linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+    background-size: 100% 100%, 100% 100%, 40px 40px, 40px 40px;
+    color: #f8fafc;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    page-break-after: always;
+    break-after: page;
+    position: relative;
+    overflow: hidden;
+    z-index: 10; /* Lays over the fixed watermark with negative z-index */
+}
+
+.cover-accent-line {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 8px;
+    background: linear-gradient(90deg, #4f46e5, #10b981, #3b82f6);
+}
+
+.cover-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.cover-brand {
+    font-size: 14pt;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.cover-brand-logo {
+    width: 28px;
+    height: 28px;
+    fill: #10b981;
+}
+
+.cover-confidential {
+    font-size: 8pt;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: #ef4444; /* Red 500 */
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    padding: 3px 8px;
+    border-radius: 4px;
+    background-color: rgba(239, 68, 68, 0.08);
+}
+
+.cover-card {
+    background: rgba(15, 23, 42, 0.65); /* Glassmorphism background */
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.4);
+    border-radius: 16px;
+    padding: 35px;
+    margin-top: 35mm;
+    margin-bottom: auto;
+    position: relative;
+}
+
+.cover-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px;
+    height: 100%;
+    background: linear-gradient(180deg, #4f46e5, #10b981);
+}
+
+.cover-title {
+    font-size: 26pt;
+    font-weight: 900;
+    line-height: 1.2;
+    margin-top: 0;
+    margin-bottom: 12px;
+    letter-spacing: -0.03em;
+    background: linear-gradient(135deg, #ffffff 60%, #cbd5e1);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.cover-subtitle {
+    font-size: 13pt;
+    font-weight: 300;
+    color: #94a3b8; /* Slate 400 */
+    margin-bottom: 30px;
+    line-height: 1.5;
+}
+
+.cover-meta-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 15px 30px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    padding-top: 20px;
+}
+
+.cover-meta-item {
+    font-size: 9.5pt;
+}
+
+.cover-meta-label {
+    color: #64748b; /* Slate 500 */
+    text-transform: uppercase;
+    font-size: 7.5pt;
+    font-weight: 700;
+    letter-spacing: 1px;
+    margin-bottom: 2px;
+}
+
+.cover-meta-value {
+    color: #e2e8f0; /* Slate 200 */
+    font-weight: 500;
+}
+
+.cover-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    padding-top: 15px;
+    font-size: 8pt;
+    color: #475569;
+}
+
+/* --- Table of Contents --- */
+.toc-list {
+    list-style-type: none;
+    padding-left: 0;
+    margin-top: 20px;
+}
+
+.toc-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: 10px;
+    font-size: 10pt;
+}
+
+.toc-item a {
+    text-decoration: none;
+    color: #1e293b;
+    font-weight: 500;
+}
+
+.toc-item a:hover {
+    color: #4f46e5;
+}
+
+.toc-leader {
+    flex-grow: 1;
+    border-bottom: 1px dotted #cbd5e1;
+    margin: 0 10px 4px 10px;
+}
+
+.toc-page {
+    font-weight: 700;
+    color: #475569;
+}
+
+/* --- Inline elements & Links --- */
+a {
+    color: #4f46e5; /* Indigo */
+    text-decoration: none;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+
+code {
+    font-family: 'Fira Code', 'Courier New', monospace;
+    font-size: 8.5pt;
+    background-color: #f1f5f9;
+    color: #0f172a;
+    padding: 2px 4px;
+    border-radius: 4px;
+    border: 1px solid #e2e8f0;
+}
+
+/* --- Callout Cards --- */
+.callout {
+    margin: 20px 0;
+    padding: 16px 20px;
+    border-radius: 12px;
+    border-left-width: 5px;
+    border-left-style: solid;
+    page-break-inside: avoid;
+    break-inside: avoid;
+    display: flex;
+    gap: 15px;
+    align-items: flex-start;
+    font-size: 9.5pt;
+}
+
+.callout-icon {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    color: inherit;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.callout-content {
+    flex-grow: 1;
+    line-height: 1.55;
+}
+
+.callout-title {
+    font-weight: 700;
+    margin-bottom: 4px;
+    font-size: 10pt;
+}
+
+/* Callout Variant Styles */
+.callout-info {
+    background-color: #f0f9ff; /* Sky 50 */
+    border-left-color: #0284c7; /* Sky 600 */
+    color: #0369a1; /* Sky 700 */
+}
+.callout-info .callout-title { color: #0c4a6e; }
+
+.callout-tip {
+    background-color: #f0fdf4; /* Green 50 */
+    border-left-color: #10b981; /* Emerald 500 */
+    color: #065f46; /* Emerald 700 */
+}
+.callout-tip .callout-title { color: #064e3b; }
+
+.callout-warning {
+    background-color: #fffbeb; /* Amber 50 */
+    border-left-color: #f59e0b; /* Amber 500 */
+    color: #78350f; /* Amber 800 */
+}
+.callout-warning .callout-title { color: #451a03; }
+
+.callout-security {
+    background-color: #fff1f2; /* Rose 50 */
+    border-left-color: #f43f5e; /* Rose 500 */
+    color: #9f1239; /* Rose 800 */
+}
+.callout-security .callout-title { color: #4c0519; }
+
+.callout-best-practice {
+    background-color: #f5f3ff; /* Violet 50 */
+    border-left-color: #7c3aed; /* Violet 500 */
+    color: #5b21b6; /* Violet 700 */
+}
+.callout-best-practice .callout-title { color: #2e1065; }
+
+.callout-adr {
+    background-color: #f8fafc; /* Slate 50 */
+    border-left-color: #0b1530; /* Deep Navy */
+    color: #334155; /* Slate 700 */
+}
+.callout-adr .callout-title { color: #0b1530; }
+
+/* --- Code Block Container with Filename Header --- */
+.code-container {
+    background-color: #0b0f19; /* Deep dark background */
+    border-radius: 12px;
+    overflow: hidden;
+    margin: 20px 0;
+    box-shadow: 0 4px 10px -2px rgba(0, 0, 0, 0.15);
+    border: 1px solid #1e293b;
+    page-break-inside: avoid;
+    break-inside: avoid;
+}
+
+.code-header {
+    background-color: #1e293b; /* Dark slate header bar */
+    padding: 8px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #334155;
+    font-size: 8.5pt;
+    color: #94a3b8;
+    font-family: 'Fira Code', monospace;
+}
+
+.code-lang-badge {
+    background-color: #334155;
+    color: #cbd5e1;
+    padding: 2px 6px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    font-size: 7.5pt;
+    font-weight: 700;
+}
+
+.code-container pre {
+    margin: 0;
+    border-radius: 0;
+    border: none;
+    background-color: transparent;
+    padding: 12px;
+}
+
+/* --- Code Block Syntax Highlighting (Markdown codehilite table output) --- */
+.codehilitetable {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 0;
+    border: none;
+}
+
+.codehilitetable td {
+    padding: 0;
+    border: none;
+    background-color: transparent;
+}
+
+.codehilitetable td.linenos {
+    width: 35px;
+    text-align: right;
+    padding-right: 12px;
+    color: #475569;
+    border-right: 1px solid #1e293b;
+    user-select: none;
+    font-family: 'Fira Code', monospace;
+    font-size: 8pt;
+}
+
+.codehilitetable td.code {
+    padding-left: 12px;
+}
+
+/* Code Syntax Palette */
+.codehilite .hll { background-color: #272e3f }
+.codehilite .c { color: #64748b; font-style: italic }
+.codehilite .k { color: #f43f5e; font-weight: bold }
+.codehilite .n { color: #f8fafc }
+.codehilite .o { color: #0ea5e9 }
+.codehilite .s { color: #10b981 }
+.codehilite .m { color: #f59e0b }
+.codehilite .kd { color: #a78bfa; font-weight: bold }
+.codehilite .nt { color: #38bdf8 }
+
+/* --- Tables --- */
+table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    margin: 20px 0;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 2px 5px -1px rgba(0, 0, 0, 0.04);
+    font-size: 9pt;
+    page-break-inside: avoid;
+    break-inside: avoid;
+}
+
+th, td {
+    border-bottom: 1px solid #e2e8f0;
+    border-right: 1px solid #e2e8f0;
+    padding: 10px 14px;
+    text-align: left;
+}
+
+th:last-child, td:last-child {
+    border-right: none;
+}
+
+tr:last-child td {
+    border-bottom: none;
+}
+
+th {
+    background-color: #0b1530; /* Deep Navy */
+    color: #ffffff;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 8pt;
+    letter-spacing: 0.5px;
+}
+
+tr:nth-child(even) {
+    background-color: #f8fafc;
+}
+
+/* --- Diagrams --- */
+.diagram-container {
+    text-align: center;
+    margin: 24px 0;
+    padding: 18px;
+    background-color: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    page-break-inside: avoid;
+    break-inside: avoid;
+}
+
+.diagram-container svg {
+    max-width: 100%;
+    height: auto;
+}
+
+.diagram-caption {
+    font-size: 8pt;
+    color: #64748b;
+    margin-top: 12px;
+    font-style: italic;
+    font-weight: 600;
+}
+
+/* --- Table Captions --- */
+.table-caption-container {
+    font-size: 8.5pt;
+    color: #475569;
+    margin-top: 15px;
+    margin-bottom: 5px;
+    font-weight: 600;
+    text-align: left;
+}
+
+/* --- Lists --- */
+ul, ol {
+    margin-top: 0;
+    margin-bottom: 12px;
+    padding-left: 20px;
+}
+
+li {
+    margin-bottom: 5px;
+}
+
+/* --- Column Layouts --- */
+.grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+/* --- Badges --- */
+.badge {
+    display: inline-block;
+    padding: 2px 6px;
+    font-size: 7.5pt;
+    font-weight: 700;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.badge-primary { background-color: #e0e7ff; color: #3730a3; } /* Indigo */
+.badge-success { background-color: #d1fae5; color: #065f46; } /* Green */
+.badge-warning { background-color: #fef3c7; color: #92400e; } /* Amber */
+.badge-danger { background-color: #fee2e2; color: #991b1b; } /* Red */
+.badge-info { background-color: #e0f2fe; color: #075985; } /* Blue */

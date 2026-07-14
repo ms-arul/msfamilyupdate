@@ -18,12 +18,14 @@ import {
   Settings,
   Wallet,
   ShieldAlert,
+  Sparkles,
 } from 'lucide-react';
 
 export const navItems = [
   { icon: LayoutDashboard, text: 'Dashboard', to: '/' },
   { icon: ListOrdered, text: 'Transactions', to: '/transactions' },
   { icon: PlusCircle, text: 'New Record', to: '/add' },
+  { icon: Sparkles, text: 'Subscription', to: '/subscription' },
   { icon: Wallet, text: 'Savings', to: '/savings' },
   { icon: HandCoins, text: 'Loans', to: '/loans' },
   { icon: PieChart, text: 'Analytics', to: '/analytics' },
@@ -117,13 +119,13 @@ export const DesktopSidebar = forwardRef<HTMLElement, DesktopSidebarProps>(({ us
           <div
             className="w-10 h-10 rounded-xl flex items-center justify-center overflow-hidden"
           >
-            <img src="/mslogoinapp.png" alt="MS Logo" className="w-full h-full object-contain" />
+            <img src="/msfamilyinside.png" alt="MS Logo" className="w-full h-full object-contain" />
           </div>
           <div className="flex flex-col items-center justify-center pt-1">
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 dark:from-white dark:to-slate-300 bg-clip-text text-transparent leading-none mb-1">
+            <h1 className="text-2xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 dark:from-white dark:to-slate-300 bg-clip-text text-transparent leading-tight pb-[2px] mb-0">
               MS {t('Family')}
             </h1>
-            <p className="text-[11px] text-primary-600 font-bold tracking-[0.15em] uppercase leading-none text-center">
+            <p className="text-[11px] text-primary-600 font-bold tracking-[0.15em] uppercase leading-tight text-center">
               {t('Finance Hub')}
             </p>
           </div>
@@ -244,13 +246,13 @@ export const MobileSidebar: React.FC<MobileSidebarProps> = ({ mobileOpen, setMob
                 <div
                   className="w-10 h-10 rounded-xl flex items-center justify-center overflow-hidden"
                 >
-                  <img src="/mslogoinapp.png" alt="MS Logo" className="w-full h-full object-contain" />
+                  <img src="/msfamilyinside.png" alt="MS Logo" className="w-full h-full object-contain" />
                 </div>
                 <div className="flex flex-col items-center justify-center pt-1">
-                  <h1 className="text-2xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 dark:from-white dark:to-slate-300 bg-clip-text text-transparent leading-none mb-1">
+                  <h1 className="text-2xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 dark:from-white dark:to-slate-300 bg-clip-text text-transparent leading-tight pb-[2px] mb-0">
                     MS {t('Family')}
                   </h1>
-                  <p className="text-[11px] text-primary-600 font-bold tracking-[0.15em] uppercase leading-none text-center">{t('Finance Hub')}</p>
+                  <p className="text-[11px] text-primary-600 font-bold tracking-[0.15em] uppercase leading-tight text-center">{t('Finance Hub')}</p>
                 </div>
               </motion.div>
 

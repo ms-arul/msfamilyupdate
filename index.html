@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="UTF-8" />
-  <link rel="icon" type="image/png" href="/mslogoinapp.png" />
+  <link rel="icon" type="image/png" href="/msfamilyinside.png" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <meta name="description"
     content="MS Family - Premium Home Finance Management Dashboard for your entire family. Track income, expenses, and savings with a stunning futuristic interface." />
@@ -20,9 +20,6 @@
         var t = localStorage.getItem('msfamily_theme_preference') || 'light';
         var isDark = t === 'dark' || (t === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
         document.documentElement.classList.add(isDark ? 'dark' : 'light');
-        // Also sync splash background
-        var splash = document.getElementById('splash');
-        if (splash) splash.style.background = isDark ? '#0a0a14' : '#ffffff';
       } catch(e) {}
     })();
   </script>
@@ -48,40 +45,22 @@
       -webkit-user-select: none;
       user-select: none;
     }
+    .dark body {
+      background-color: #07070d;
+      color: #f8fafc;
+    }
     #root {
       min-height: 100vh;
       min-height: 100dvh;
       background-color: #ffffff;
     }
-    /* Pre-render splash so user never sees blank */
-    #splash {
-      position: fixed;
-      inset: 0;
-      z-index: 99999;
-      background: #ffffff;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: opacity 0.3s ease;
-    }
-    #splash img {
-      width: 80px;
-      height: 80px;
-      border-radius: 22px;
-      animation: breathe 2s ease-in-out infinite;
-      pointer-events: none;
-    }
-    @keyframes breathe {
-      0%, 100% { transform: scale(1); }
-      50% { transform: scale(1.04); }
+    .dark #root {
+      background-color: #07070d;
     }
   </style>
 </head>
 
 <body>
-  <div id="splash">
-    <img src="/mslogoinapp.png" alt="MS Family" />
-  </div>
   <div id="root"></div>
   <script>
     // Prevent right-click / long-press context menu globally

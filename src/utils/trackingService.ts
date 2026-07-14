@@ -39,10 +39,10 @@ const getBatteryLevel = async (): Promise<number> => {
   return 100;
 };
 
-export const upsertLocation = async (userId: string, coords: GeolocationCoordinates): Promise<void> => {
+export const upsertLocation = async (userId: string, coords: GeolocationCoordinates, familyId?: string | null): Promise<void> => {
   try {
     const batteryLevel = await getBatteryLevel();
-    const payload = {
+    const payload: Record<string, any> = {
       user_id: userId,
       latitude: coords.latitude,
       longitude: coords.longitude,
@@ -54,6 +54,11 @@ export const upsertLocation = async (userId: string, coords: GeolocationCoordina
       is_sharing: true,
       updated_at: new Date().toISOString(),
     };
+
+    // Include family_id for cross-family isolation
+    if (familyId) {
+      payload.family_id = familyId;
+    }
 
     const status = await Network.getStatus();
     if (!status.connected) {
@@ -78,6 +83,7 @@ export const upsertLocation = async (userId: string, coords: GeolocationCoordina
       battery_level: 100,
       is_sharing: true,
       updated_at: new Date().toISOString(),
+      ...(familyId ? { family_id: familyId } : {}),
     });
   }
 };
@@ -157,10 +163,10 @@ export const updateSharingStatus = async (userId: string, isSharing: boolean): P
   } catch {}
 };
 
-export const updateMyLocationOnce = async (userId: string): Promise<GeolocationCoordinates | null> => {
+export const updateMyLocationOnce = async (userId: string, familyId?: string | null): Promise<GeolocationCoordinates | null> => {
   const pos = await getCurrentLocation();
   if (pos) {
-    await upsertLocation(userId, pos.coords);
+    await upsertLocation(userId, pos.coords, familyId);
     return pos.coords;
   }
   return null;

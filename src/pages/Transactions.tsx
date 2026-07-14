@@ -4,6 +4,11 @@ import { useFinance } from '../context/FinanceContext';
 import { downloadBase64File } from '../utils/downloadHelper';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
+import { useFamily } from '../context/FamilyContext';
+import { invalidateStorageCache } from '../utils/storageService';
+import { useNavigate } from 'react-router-dom';
+import { supabase } from '../lib/supabase';
+import { useSubscription } from '../context/SubscriptionContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -23,6 +28,7 @@ import {
   ChevronRight,
   Download,
   Eye,
+  Pencil,
   X,
   SlidersHorizontal,
   BarChart3,
@@ -300,7 +306,11 @@ const FilterChips: React.FC<FilterChipsProps> = ({ filters, onRemove, onClearAll
 // ============================================================================
 export default function Transactions() {
   const { transactions = [], deleteTransaction, refetch, loading } = useFinance();
+  const { isPremium, setShowUpgradeModal } = useSubscription();
   const { t } = useLanguage();
+  const { family } = useFamily();
+  const { user } = useAuth();
+  const navigate = useNavigate();
 
   const isMobile = useMediaQuery('(max-width: 640px)');
 
@@ -550,7 +560,28 @@ export default function Transactions() {
 
     setDeletingId(transactionToDelete);
     try {
+      // Find the transaction object to get its details before deleting
+      const tx = transactions.find(t => t.id === transactionToDelete);
+      
+      // If the transaction has a receipt, delete it from storage first
+      if (tx?.proofUrl) {
+        try {
+          const oldPath = tx.proofUrl.split('/proofs/')[1];
+          if (oldPath) {
+            await supabase.storage.from('proofs').remove([oldPath]);
+          }
+        } catch (delErr) {
+          console.warn('Failed to delete receipt during transaction deletion:', delErr);
+        }
+      }
+
       await deleteTransaction(transactionToDelete);
+      
+      // Invalidate storage cache
+      if (user?.id) {
+        invalidateStorageCache(user.id, family?.id);
+      }
+
       showToast(t('Transaction deleted successfully'));
     } catch (err) {
       showToast(t('Failed to delete. Try again.'), 'error');
@@ -559,7 +590,7 @@ export default function Transactions() {
       setDeleteModalOpen(false);
       setTransactionToDelete(null);
     }
-  }, [transactionToDelete, deleteTransaction, t, showToast]);
+  }, [transactionToDelete, deleteTransaction, t, showToast, transactions, user, family]);
 
   // Export PDF
   const generatePDF = useCallback(async () => {
@@ -677,7 +708,13 @@ export default function Transactions() {
               )}
             </button>
             <button
-              onClick={() => setIsExportModalOpen(true)}
+              onClick={() => {
+                if (!isPremium) {
+                  setShowUpgradeModal(true);
+                } else {
+                  setIsExportModalOpen(true);
+                }
+              }}
               aria-label="Export PDF"
               className="glass-btn relative w-10 h-10 rounded-[12px] flex items-center justify-center text-slate-600 dark:text-slate-300 disabled:opacity-40"
               disabled={processedTransactions.length === 0}
@@ -1137,6 +1174,16 @@ export default function Transactions() {
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
+                              navigate(`/edit-transaction/${tx.id}`, { state: tx });
+                            }}
+                            className="p-2 rounded-lg text-slate-400 hover:text-indigo-500 hover:bg-indigo-500/10 dark:hover:bg-indigo-500/20 border border-transparent hover:border-indigo-500/20 transition-all opacity-0 group-hover:opacity-100 backdrop-blur-sm"
+                            aria-label="Edit transaction"
+                          >
+                            <Pencil size={14} />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
                               handleSingleDelete(tx.id);
                             }}
                             disabled={deletingId === tx.id}
@@ -1336,6 +1383,18 @@ export default function Transactions() {
                         </div>
                       )}
                     </div>
+                    <button
+                      onClick={() => {
+                        if (selectedTx) {
+                          setSelectedTx(null);
+                          navigate(`/edit-transaction/${selectedTx.id}`, { state: selectedTx });
+                        }
+                      }}
+                      className="w-full py-3.5 mb-2.5 text-sm font-bold text-indigo-500 bg-indigo-500/10 dark:bg-indigo-500/20 rounded-2xl hover:bg-indigo-500/20 dark:hover:bg-indigo-500/30 transition-all border border-indigo-500/20 backdrop-blur-md flex items-center justify-center gap-2"
+                    >
+                      <Pencil size={16} />
+                      {t('Edit Transaction')}
+                    </button>
                     <button
                       onClick={() => {
                         if (selectedTx) {

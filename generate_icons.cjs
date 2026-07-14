@@ -2,7 +2,7 @@ const sharp = require('sharp');
 const path = require('path');
 const fs = require('fs');
 
-const SOURCE = path.join(__dirname, 'public', 'mslogo.png');
+const SOURCE = path.join(__dirname, 'public', 'msfamily.png');
 const RES_DIR = path.join(__dirname, 'android', 'app', 'src', 'main', 'res');
 
 // Android launcher icon sizes per density
@@ -24,7 +24,7 @@ const FOREGROUND_SIZES = {
 };
 
 async function generateIcons() {
-  console.log('🎨 Generating Android launcher icons from mslogo.png...\n');
+  console.log('🎨 Generating Android launcher icons from msfamily.png...\n');
 
   // Generate standard launcher icons (ic_launcher.png and ic_launcher_round.png)
   for (const [folder, size] of Object.entries(LAUNCHER_SIZES)) {

@@ -15,7 +15,9 @@ import {
   Users,
   ChevronLeft,
   ChevronRight,
+  Cloud,
 } from 'lucide-react';
+import { getFamilyStorageUsage, getUserStorageUsage, formatBytes, USER_STORAGE_LIMIT_BYTES } from '../utils/storageService';
 import {
   BarChart,
   Bar,
@@ -213,6 +215,12 @@ export default function FamilyOverview() {
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
+  const [familyStorage, setFamilyStorage] = useState<{
+    usedBytes: number;
+    limitBytes: number;
+    percentage: number;
+    memberSizes: Record<string, number>;
+  } | null>(null);
 
   const handlePrevMonth = useCallback(() => setCurrentDate(p => subMonths(p, 1)), []);
   const handleNextMonth = useCallback(() => setCurrentDate(p => addMonths(p, 1)), []);
@@ -279,6 +287,46 @@ export default function FamilyOverview() {
     }
     fetchFamilyData();
   }, [user, familyMembers, familyLoading]);
+
+  // Load family storage usage
+  useEffect(() => {
+    if (familyLoading) return;
+    const memberIds = familyMembers.length > 0
+      ? familyMembers.map(m => m.user_id)
+      : (user ? [user.id] : []);
+
+    if (memberIds.length === 0) return;
+
+    let active = true;
+
+    async function loadFamilyStorage() {
+      try {
+        const fId = family?.id || 'default';
+        const data = await getFamilyStorageUsage(memberIds, fId);
+        
+        const memberSizes: Record<string, number> = {};
+        for (const uid of memberIds) {
+          const uData = await getUserStorageUsage(uid);
+          memberSizes[uid] = uData.usedBytes;
+        }
+
+        if (active) {
+          setFamilyStorage({
+            ...data,
+            memberSizes,
+          });
+        }
+      } catch (err) {
+        console.warn('Failed to load family storage:', err);
+      }
+    }
+
+    loadFamilyStorage();
+
+    return () => {
+      active = false;
+    };
+  }, [user, familyMembers, family, familyLoading, allTransactions]);
 
   // Filter transactions for the selected month
   const filteredTransactions = useMemo(() => {
@@ -523,6 +571,78 @@ export default function FamilyOverview() {
           </div>
         </div>
       </motion.div>
+
+      {/* ── Family Cloud Storage Card ── */}
+      {familyStorage && (
+        <motion.div
+          variants={item}
+          className="backdrop-blur-xl bg-white/[0.04] dark:bg-white/[0.02] border border-white/[0.1] dark:border-white/[0.05] p-5 sm:p-6 relative overflow-hidden rounded-[28px] shadow-[0_8px_32px_0_rgba(0,0,0,0.06),inset_0_1px_1px_0_rgba(255,255,255,0.12)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.3),inset_0_1px_1px_0_rgba(255,255,255,0.05)]"
+        >
+          <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-bl from-primary-500/5 to-transparent rounded-full blur-3xl pointer-events-none" />
+          <div className="relative z-10">
+            <div className="flex justify-between items-center mb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-primary-500/10 text-primary-500 rounded-xl">
+                  <Cloud size={16} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">{t('Family Cloud Storage')}</h3>
+                  <p className="text-[10px] text-slate-400 mt-0.5">
+                    {formatBytes(familyStorage.usedBytes)} / {formatBytes(familyStorage.limitBytes)} {t('used')}
+                  </p>
+                </div>
+              </div>
+              <span className={`text-xs font-black px-2.5 py-1 rounded-[10px] ${
+                familyStorage.percentage > 80
+                  ? 'bg-rose-500/10 text-rose-500 border border-rose-500/20'
+                  : familyStorage.percentage > 50
+                    ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
+                    : 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
+              }`}>
+                {familyStorage.percentage}%
+              </span>
+            </div>
+
+            {/* Combined Progress Bar */}
+            <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-slate-800/80 overflow-hidden border border-slate-200/20 dark:border-white/5 shadow-inner mb-4">
+              <motion.div
+                initial={{ width: 0 }}
+                animate={{ width: `${familyStorage.percentage}%` }}
+                transition={{ duration: 0.8, ease: 'easeOut' }}
+                className={`h-full rounded-full ${
+                  familyStorage.percentage > 80
+                    ? 'bg-gradient-to-r from-rose-500 to-red-600'
+                    : familyStorage.percentage > 50
+                      ? 'bg-gradient-to-r from-amber-400 to-orange-500'
+                      : 'bg-gradient-to-r from-emerald-400 to-teal-500'
+                }`}
+              />
+            </div>
+
+            {/* Member Breakdown */}
+            <div className="space-y-2 mt-3 pt-2 border-t border-slate-200/20 dark:border-white/5">
+              <p className="text-[9px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest">{t('Breakdown by Member')}</p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {allProfiles.map(p => {
+                  const mSize = familyStorage.memberSizes[p.id] || 0;
+                  const mPercent = ((mSize / USER_STORAGE_LIMIT_BYTES) * 100).toFixed(1);
+                  return (
+                    <div key={p.id} className="p-2.5 rounded-xl bg-slate-50/50 dark:bg-white/[0.02] border border-slate-200/30 dark:border-white/[0.04]">
+                      <p className="text-[10px] font-bold text-slate-700 dark:text-slate-300 truncate">{t(p.name)}</p>
+                      <p className="text-[11px] font-black text-slate-800 dark:text-slate-200 mt-1 font-sans">
+                        {formatBytes(mSize, 1)}
+                      </p>
+                      <div className="w-full bg-slate-200/50 dark:bg-slate-800 h-1 rounded-full mt-1.5 overflow-hidden">
+                        <div className="bg-primary-500 h-full rounded-full" style={{ width: `${mPercent}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      )}
 
       {/* Top Performers */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

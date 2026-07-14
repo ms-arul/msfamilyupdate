@@ -20,14 +20,31 @@ const MyProofs = React.lazy(() => import('./pages/MyProofs'));
 const Notifications = React.lazy(() => import('./pages/Notifications'));
 const Login = React.lazy(() => import('./pages/Login'));
 const Settings = React.lazy(() => import('./pages/Settings'));
+const ManageStorage = React.lazy(() => import('./pages/ManageStorage'));
+const LanguageSettings = React.lazy(() => import('./pages/LanguageSettings'));
 const AdminPanel = React.lazy(() => import('./pages/AdminPanel'));
 const Savings = React.lazy(() => import('./pages/Savings'));
 const LiveTracking = React.lazy(() => import('./pages/LiveTracking'));
+const EditTransaction = React.lazy(() => import('./pages/EditTransaction'));
+const SubscriptionPage = React.lazy(() => import('./pages/SubscriptionPage'));
+const AboutMSFamilyPage = React.lazy(() => import('./pages/info/AboutMSFamilyPage'));
+const LegalInformationPage = React.lazy(() => import('./pages/info/LegalInformationPage'));
+const TermsOfServicePage = React.lazy(() => import('./pages/info/TermsOfServicePage'));
+const PrivacyPolicyPage = React.lazy(() => import('./pages/info/PrivacyPolicyPage'));
+const SubscriptionRefundPolicyPage = React.lazy(() => import('./pages/info/SubscriptionRefundPolicyPage'));
+const DataRetentionPolicyPage = React.lazy(() => import('./pages/info/DataRetentionPolicyPage'));
+const ContactSupportPage = React.lazy(() => import('./pages/info/ContactSupportPage'));
+const AppVersionPage = React.lazy(() => import('./pages/info/AppVersionPage'));
+const ChangelogPage = React.lazy(() => import('./pages/info/ChangelogPage'));
+const AppInfoLandingPage = React.lazy(() => import('./pages/info/AppInfoLandingPage'));
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { FinanceProvider, useFinance } from './context/FinanceContext';
 import { FamilyProvider } from './context/FamilyContext';
+import { SubscriptionProvider } from './context/SubscriptionContext';
 import { LanguageProvider } from './context/LanguageContext';
 import { CallProvider } from './context/CallContext';
+import UpgradeModal from './components/UpgradeModal';
+const AdminMonetization = React.lazy(() => import('./pages/AdminMonetization'));
 import { initTheme } from './utils/themeService';
 import { usePushNotifications } from './hooks/usePushNotifications';
 import { scheduleNotifications, initNotificationListener, initNotificationChannel } from './utils/notificationService';
@@ -63,10 +80,10 @@ const NotificationInit: React.FC = () => {
 // Listen to app state changes for background sync
 const BackgroundSyncSetup: React.FC = () => {
   const { user } = useAuth();
-  
+
   useEffect(() => {
     if (!user || !Capacitor.isNativePlatform()) return;
-    
+
     const listenerPromise = CapacitorApp.addListener('appStateChange', ({ isActive }) => {
       if (!isActive) {
         // App is moving to background, sync final state
@@ -333,7 +350,10 @@ interface ProtectedRouteProps {
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+  if (loading) {
+    return <PageLoader />;
+  }
   if (!user) {
     return <Navigate to="/login" replace />;
   }
@@ -345,7 +365,10 @@ interface AdminRouteGuardProps {
 }
 
 const AdminRouteGuard: React.FC<AdminRouteGuardProps> = ({ children }) => {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+  if (loading) {
+    return <PageLoader />;
+  }
   const isAdmin = user?.role?.toLowerCase() === 'admin' || user?.name === 'ArulPrakash';
   if (!user || !isAdmin) {
     return <Navigate to="/" replace />;
@@ -356,9 +379,9 @@ const AdminRouteGuard: React.FC<AdminRouteGuardProps> = ({ children }) => {
 const SmsToastContainer: React.FC = () => {
   const { activeSmsToast, setActiveSmsToast } = useFinance();
   return (
-    <SmsToast 
-      toast={activeSmsToast} 
-      onClose={() => setActiveSmsToast(null)} 
+    <SmsToast
+      toast={activeSmsToast}
+      onClose={() => setActiveSmsToast(null)}
     />
   );
 };
@@ -382,58 +405,76 @@ function App() {
     <LanguageProvider>
       <AuthProvider>
         <CallProvider>
-        <FinanceProvider>
-        <FamilyProvider>
-          <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-            <PushNotificationSetup />
-            <NotificationInit />
-            {deferServices && (
-              <>
-                <BackgroundSyncSetup />
-                <PermissionRequestor />
-                <GoldPriceMonitor />
-                <SmsListenerSetup />
-              </>
-            )}
-            <BackButtonHandler />
-            <ShareActionSheet />
-            <SmsToastContainer />
-            <NetworkStatusSetup />
-            <AppLockGuard>
-            <MaintenanceGuard>
-            <div className="bg-animated-gradient h-full min-h-screen">
-              <Suspense fallback={<PageLoader />}>
-              <Routes>
-                <Route path="/login" element={<Login />} />
-                <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-                  <Route index element={<Dashboard />} />
-                  <Route path="transactions" element={<Transactions />} />
-                  <Route path="add" element={<AddTransaction />} />
-                  <Route path="loans" element={<Loans />} />
-                  <Route path="savings" element={<Savings />} />
-                  <Route path="analytics" element={<Analytics />} />
-                  <Route path="calendar" element={<CalendarView />} />
-                  <Route path="family" element={<FamilyOverview />} />
-                  <Route path="settings/family-setup" element={<FamilyGroups />} />
-                  <Route path="family/create" element={<CreateFamily />} />
-                  <Route path="family/join" element={<JoinFamily />} />
-                  <Route path="family/join/:code" element={<JoinFamily />} />
-                  <Route path="family/members" element={<FamilyMembers />} />
-                  <Route path="family/invite" element={<FamilyInvite />} />
-                  <Route path="proofs" element={<MyProofs />} />
-                  <Route path="notifications" element={<Notifications />} />
-                  <Route path="settings" element={<Settings />} />
-                  <Route path="admin" element={<AdminRouteGuard><AdminPanel /></AdminRouteGuard>} />
-                  <Route path="tracking" element={<LiveTracking />} />
-                </Route>
-              </Routes>
-              </Suspense>
-            </div>
-            </MaintenanceGuard>
-            </AppLockGuard>
-          </Router>
-        </FamilyProvider>
-        </FinanceProvider>
+          <FinanceProvider>
+            <FamilyProvider>
+              <SubscriptionProvider>
+                <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+                  <PushNotificationSetup />
+                  <NotificationInit />
+                  {deferServices && (
+                    <>
+                      <BackgroundSyncSetup />
+                      <PermissionRequestor />
+                      <GoldPriceMonitor />
+                      <SmsListenerSetup />
+                    </>
+                  )}
+                  <BackButtonHandler />
+                  <ShareActionSheet />
+                  <SmsToastContainer />
+                  <NetworkStatusSetup />
+                  <UpgradeModal />
+                  <AppLockGuard>
+                    <MaintenanceGuard>
+                      <div className="bg-animated-gradient h-full min-h-screen">
+                        <Suspense fallback={<PageLoader />}>
+                          <Routes>
+                            <Route path="/login" element={<Login />} />
+                            <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+                              <Route index element={<Dashboard />} />
+                              <Route path="transactions" element={<Transactions />} />
+                              <Route path="add" element={<AddTransaction />} />
+                              <Route path="subscription" element={<SubscriptionPage />} />
+                              <Route path="loans" element={<Loans />} />
+                              <Route path="savings" element={<Savings />} />
+                              <Route path="analytics" element={<Analytics />} />
+                              <Route path="calendar" element={<CalendarView />} />
+                              <Route path="family" element={<FamilyOverview />} />
+                              <Route path="settings/family-setup" element={<FamilyGroups />} />
+                              <Route path="family/create" element={<CreateFamily />} />
+                              <Route path="family/join" element={<JoinFamily />} />
+                              <Route path="family/join/:code" element={<JoinFamily />} />
+                              <Route path="family/members" element={<FamilyMembers />} />
+                              <Route path="family/invite" element={<FamilyInvite />} />
+                              <Route path="proofs" element={<MyProofs />} />
+                              <Route path="notifications" element={<Notifications />} />
+                              <Route path="settings" element={<Settings />} />
+                              <Route path="settings/language" element={<LanguageSettings />} />
+                              <Route path="settings/manage-storage" element={<ManageStorage />} />
+                              <Route path="settings/admin-monetization" element={<AdminMonetization />} />
+                              <Route path="settings/app-info" element={<AppInfoLandingPage />} />
+                              <Route path="settings/about" element={<AboutMSFamilyPage />} />
+                              <Route path="settings/legal" element={<LegalInformationPage />} />
+                              <Route path="settings/terms" element={<TermsOfServicePage />} />
+                              <Route path="settings/privacy" element={<PrivacyPolicyPage />} />
+                              <Route path="settings/subscription-refund" element={<SubscriptionRefundPolicyPage />} />
+                              <Route path="settings/data-retention" element={<DataRetentionPolicyPage />} />
+                              <Route path="settings/contact-support" element={<ContactSupportPage />} />
+                              <Route path="settings/version" element={<AppVersionPage />} />
+                              <Route path="settings/changelog" element={<ChangelogPage />} />
+                              <Route path="admin" element={<AdminRouteGuard><AdminPanel /></AdminRouteGuard>} />
+                              <Route path="tracking" element={<LiveTracking />} />
+                              <Route path="edit-transaction/:id" element={<EditTransaction />} />
+                            </Route>
+                          </Routes>
+                        </Suspense>
+                      </div>
+                    </MaintenanceGuard>
+                  </AppLockGuard>
+                </Router>
+              </SubscriptionProvider>
+            </FamilyProvider>
+          </FinanceProvider>
         </CallProvider>
       </AuthProvider>
     </LanguageProvider>

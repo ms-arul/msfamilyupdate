@@ -7,6 +7,9 @@ import { CachedImage } from '../components/ui/CachedImage';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
+import { useFamily } from '../context/FamilyContext';
+import { invalidateStorageCache, getUserStorageUsage } from '../utils/storageService';
+import { useSubscription, FREE_STORAGE_LIMIT_BYTES } from '../context/SubscriptionContext';
 import { supabase } from '../lib/supabase';
 import { useLocation } from 'react-router-dom';
 import { Capacitor } from '@capacitor/core';
@@ -65,7 +68,9 @@ const fileToBase64 = (file: File): Promise<string> => {
 
 export default function MyProofs() {
   const { user } = useAuth();
+  const { family } = useFamily();
   const { t } = useLanguage();
+  const { isPremium, features, setShowUpgradeModal } = useSubscription();
   const location = useLocation();
   const [proofs, setProofs] = useState<Proof[]>([]);
   const [activeCategory, setActiveCategory] = useState<string>('all');
@@ -339,6 +344,9 @@ export default function MyProofs() {
       // Update local state
       setProofs(prev => prev.filter(p => p.id !== deleteTarget.id));
 
+      // Invalidate storage cache
+      invalidateStorageCache(user.id, family?.id);
+
       // Close any open modals showing this proof
       if (activeProof?.id === deleteTarget.id) closeLightbox();
       if (detailsProof?.id === deleteTarget.id) closeDetails();
@@ -606,6 +614,22 @@ export default function MyProofs() {
   const saveDocument = async () => {
     if (!newProofForm.title || !newProofForm.localImage || !user) return;
 
+    try {
+      const usage = await getUserStorageUsage(user.id);
+      const uploadSize = newProofForm.localImage.size + (newProofForm.backLocalImage?.size || 0);
+      const limit = features?.max_storage_bytes || FREE_STORAGE_LIMIT_BYTES;
+      if (usage.usedBytes + uploadSize > limit) {
+        if (!isPremium) {
+          setShowUpgradeModal(true);
+        } else {
+          alert(t('Premium storage limit reached (maximum 5 GB allowed).'));
+        }
+        return;
+      }
+    } catch (err) {
+      console.warn('Storage validation failed, proceeding:', err);
+    }
+
     setIsUploading(true);
     setUploadProgress('Uploading document...');
 
@@ -699,6 +723,9 @@ export default function MyProofs() {
       }
 
       if (dbError) throw dbError;
+
+      // Invalidate storage cache
+      invalidateStorageCache(user.id, family?.id);
 
       if (dbData) {
         setProofs(prev => [dbData as Proof, ...prev]);

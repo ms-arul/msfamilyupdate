@@ -405,14 +405,14 @@ export default function Layout() {
               {/* Specular highlights */}
               <span className="absolute top-0 left-2 right-2 h-px bg-gradient-to-r from-transparent via-white/60 to-transparent pointer-events-none" />
               <div className="w-[30px] h-[30px] shrink-0 flex items-center justify-center">
-                <img src="/mslogoinapp.png" alt="MS Logo" className="w-full h-full object-contain" loading="lazy" />
+                <img src="/msfamilyinside.png" alt="MS Logo" className="w-full h-full object-contain" loading="lazy" />
               </div>
               <div className="flex flex-col items-start justify-center overflow-hidden">
-                <span className="text-[14.5px] font-black text-slate-900 dark:text-white leading-none tracking-tight truncate w-full">
+                <span className="text-[14.5px] font-black text-slate-900 dark:text-white leading-tight tracking-tight truncate w-full pb-[2.5px]">
                   {location.pathname === '/' ? `MS ${t('Family')}` : pageTitle}
                 </span>
                 {(!isMobile || !hasPageActions) && (
-                  <span className="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.11em] leading-none truncate w-full mt-[2.5px]">
+                  <span className="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.11em] leading-none truncate w-full mt-[-1.5px] pb-[0.5px]">
                     {location.pathname === '/' ? t('Finance Hub') : `MS ${t('Family')}`}
                   </span>
                 )}

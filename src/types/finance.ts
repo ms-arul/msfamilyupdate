@@ -13,6 +13,12 @@ export interface Transaction {
   memberName: string;
   proofUrl: string | null;
   created_at: string;
+  // Family isolation
+  familyId?: string | null;
+  // Audit trail
+  updatedAt?: string | null;
+  editedBy?: string | null;
+  editCount?: number;
   // SMS source fields
   source?: 'manual' | 'sms' | string;
   bankName?: string | null;

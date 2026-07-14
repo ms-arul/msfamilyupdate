@@ -1,19 +1,13 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { translateToTamil, prefetchTranslations, getCachedTranslation, TAMIL_DICTIONARY } from '../utils/languageService';
+import React, { useState, useEffect, useCallback } from 'react';
+import { DICTIONARIES, LANGUAGE_LIST } from '../utils/translationDictionaries';
 import { createSafeContext } from './contextHelper';
-
-export const LANGUAGES = {
-  EN: 'en',
-  TA: 'ta'
-} as const;
-
-export type LanguageType = typeof LANGUAGES[keyof typeof LANGUAGES];
 
 export interface LanguageContextType {
   language: string;
   setLanguage: (lang: string) => void;
   t: (text: string) => string;
   isTranslating: boolean;
+  isChangingLanguage: boolean;
   prefetch: (texts: string[]) => Promise<void>;
 }
 
@@ -22,105 +16,85 @@ const [useLanguage, LanguageContextProvider] = createSafeContext<LanguageContext
 export { useLanguage };
 
 const LANG_STORAGE_KEY = 'msfamily_language';
+const LANG_TIMESTAMP_KEY = 'msfamily_language_timestamp';
 
 interface LanguageProviderProps {
   children: React.ReactNode;
 }
 
+// Helper to auto-detect device language
+const getDeviceLanguage = (): string => {
+  try {
+    const locale = navigator.language || (navigator.languages && navigator.languages[0]) || 'en';
+    const shortCode = locale.split('-')[0];
+    
+    // Check for exact matches first (e.g., zh-CN, en-IN)
+    const exactMatch = LANGUAGE_LIST.find(lang => lang.code.toLowerCase() === locale.toLowerCase());
+    if (exactMatch) return exactMatch.code;
+    
+    // Check for short code matches (e.g., es, fr, hi)
+    const shortMatch = LANGUAGE_LIST.find(lang => lang.code.toLowerCase() === shortCode.toLowerCase());
+    if (shortMatch) return shortMatch.code;
+  } catch (e) {
+    console.error('Failed to get device language:', e);
+  }
+  return 'en'; // default fallback
+};
+
 export const LanguageProvider: React.FC<LanguageProviderProps> = ({ children }) => {
   const [language, setLanguageState] = useState<string>(() => {
-    return localStorage.getItem(LANG_STORAGE_KEY) || LANGUAGES.EN;
+    return localStorage.getItem(LANG_STORAGE_KEY) || getDeviceLanguage();
   });
 
-  const [isTranslating] = useState(false);
+  // Set language instantly without loading transition screen
+  const setLanguage = useCallback((lang: string) => {
+    setLanguageState(lang);
+    localStorage.setItem(LANG_STORAGE_KEY, lang);
+    localStorage.setItem(LANG_TIMESTAMP_KEY, new Date().toISOString());
+  }, []);
 
-  // Use a ref for the cache to avoid re-render cascades.
-  // Only the language change should trigger re-renders, not individual translations.
-  const cacheRef = useRef<Record<string, string>>({});
-  const [, forceUpdate] = useState(0);
-  const pendingRef = useRef<Set<string>>(new Set()); // Track in-flight translations
-
+  // Update layout direction dynamically (RTL for Arabic, LTR otherwise)
   useEffect(() => {
-    localStorage.setItem(LANG_STORAGE_KEY, language);
-    // Reset pending when language changes
-    pendingRef.current.clear();
-
-    // When switching to Tamil, prefetch all dictionary keys to ensure instant rendering
-    if (language === LANGUAGES.TA) {
-      // Pre-populate cache with dictionary entries immediately
-      Object.entries(TAMIL_DICTIONARY).forEach(([key, value]) => {
-        cacheRef.current[key] = value;
-      });
-      forceUpdate(c => c + 1);
+    if (language === 'ar') {
+      document.documentElement.dir = 'rtl';
     } else {
-      // Clear Tamil cache when switching to English
-      cacheRef.current = {};
+      document.documentElement.dir = 'ltr';
     }
   }, [language]);
 
   /**
-   * Set language with optional prefetching
-   */
-  const setLanguage = useCallback((lang: string) => {
-    setLanguageState(lang);
-  }, []);
-
-  /**
-   * The core translation function.
-   * Uses hardcoded dictionary + ref-based cache so translations are instant.
+   * Enterprise translation lookup function.
+   * Looks up translated values in our O(1) dictionary and falls back to original text.
    */
   const t = useCallback((text: string) => {
     if (!text || typeof text !== 'string') return text;
 
-    // English mode: instant return, zero overhead
-    if (language === LANGUAGES.EN) {
+    // English: instant return (source text is in English)
+    if (language === 'en') {
       return text;
     }
 
-    // Check hardcoded dictionary first (instant, zero latency)
-    if (TAMIL_DICTIONARY[text]) {
-      return TAMIL_DICTIONARY[text];
+    const dict = DICTIONARIES[language];
+    if (dict && dict[text]) {
+      return dict[text];
     }
 
-    // Check in-memory ref cache (instant, no state update)
-    if (cacheRef.current[text]) {
-      return cacheRef.current[text];
-    }
+    // Fallback to English (the original text itself)
+    return text;
+  }, [language]);
 
-    // Check service-level localStorage cache (synchronous)
-    const syncCached = getCachedTranslation(text);
-    if (syncCached) {
-      cacheRef.current[text] = syncCached;
-      return syncCached;
-    }
-
-    // If we're already fetching this text, don't fire another request
-    if (pendingRef.current.has(text)) {
-      return text;
-    }
-
-    // Fire async translation ONCE, then batch-update
-    pendingRef.current.add(text);
-    translateToTamil(text).then(translated => {
-      pendingRef.current.delete(text);
-      if (translated && translated !== text) {
-        cacheRef.current[text] = translated;
-        // Single batched re-render after translation arrives
-        forceUpdate(c => c + 1);
-      }
-    }).catch(() => {
-      pendingRef.current.delete(text);
-    });
-
-    return text; // Return English immediately while translating
-  }, [language]); // Only depends on language, NOT on cache state
+  // Prefetch no-op helper (kept for business logic compatibility)
+  const prefetch = useCallback(async (texts: string[]): Promise<void> => {
+    return;
+  }, []);
 
   const value = {
     language,
     setLanguage,
     t,
-    isTranslating,
-    prefetch: prefetchTranslations
+    isTranslating: false,
+    isChangingLanguage: false,
+    prefetch
   };
 
   return (

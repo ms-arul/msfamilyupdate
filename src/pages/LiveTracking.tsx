@@ -5,6 +5,7 @@ import {
   Minimize2, Maximize2, RefreshCw, Navigation, Lock, Signal,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useFamily } from '../context/FamilyContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useCall } from '../context/CallContext';
 import { supabase } from '../lib/supabase';
@@ -183,6 +184,8 @@ interface Profile {
 // ------------------------------------------------------------
 export default function LiveTracking() {
   const { user } = useAuth();
+  const { family } = useFamily();
+  const familyId = family?.id || null;
   const { t } = useLanguage();
   const { startCall } = useCall();
 
@@ -284,14 +287,16 @@ export default function LiveTracking() {
     initTracking();
   }, [permissionGranted, user, isSharing]);
 
-  // Fetch family locations + real‑time subscription
+  // Fetch family locations + real‑time subscription — FAMILY SCOPED (BUG 2 FIX)
   const fetchLocations = useCallback(async () => {
-    if (!user) return;
+    if (!user || !familyId) return;
     setIsRefreshing(true);
     try {
+      // BUG 2 FIX: Only fetch locations of members in the CURRENT family
       const { data: locData, error } = await supabase
         .from('user_locations')
         .select('*')
+        .eq('family_id', familyId)
         .eq('is_sharing', true)
         .neq('user_id', user.id);
       if (error) {
@@ -317,15 +322,17 @@ export default function LiveTracking() {
     } finally {
       if (mountedRef.current) setIsRefreshing(false);
     }
-  }, [user]);
+  }, [user, familyId]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !familyId) return;
     fetchLocations();
+    // BUG 2 FIX: Realtime subscription scoped by family_id
     const channel = supabase
-      .channel(`tracking_${user.id}`)
+      .channel(`tracking_family_${familyId}`)
       .on('postgres_changes', {
         event: '*', schema: 'public', table: 'user_locations',
+        filter: `family_id=eq.${familyId}`,
       }, () => fetchLocations())
       .subscribe();
     const interval = setInterval(fetchLocations, 30000);
@@ -358,7 +365,7 @@ export default function LiveTracking() {
         resumeListener.then((l: any) => l.remove());
       }
     };
-  }, [user, fetchLocations]);
+  }, [user, familyId, fetchLocations]);
 
   // Handlers
   const handleGrantPermission = async () => {

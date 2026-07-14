@@ -4,6 +4,8 @@ import { useFinance } from '../context/FinanceContext';
 import { useLanguage } from '../context/LanguageContext';
 import { downloadBase64File } from '../utils/downloadHelper';
 import { motion, AnimatePresence, animate } from 'framer-motion';
+import { useSubscription } from '../context/SubscriptionContext';
+import PremiumGate from '../components/PremiumGate';
 import {
   PieChart,
   Pie,
@@ -345,6 +347,7 @@ function parseGeminiJson(text: string): any {
 export default function Analytics() {
   const { transactions = [], savingsGoal = { name: 'Family Goal', target: 100000 } } =
     useFinance();
+  const { isPremium, setShowUpgradeModal } = useSubscription();
   const [timeFilter, setTimeFilter] = useState<'all' | 'month' | 'week'>('all');
   const [hoveredPieIndex, setHoveredPieIndex] = useState<number | null>(null);
   const { t } = useLanguage();
@@ -583,6 +586,10 @@ export default function Analytics() {
   }, [categoryData, totalExpense, totalIncome, savingsRate, memberData, savingsGoal]);
 
   const triggerAiAnalysis = useCallback(async () => {
+    if (!isPremium) {
+      setShowUpgradeModal(true);
+      return;
+    }
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
     if (!apiKey) {
       showToast(t('Gemini API key is missing'), AlertTriangle);
@@ -651,6 +658,10 @@ Do not wrap the JSON in markdown code blocks. Just return the raw JSON array.
 
   // Export handler
   const exportData = useCallback(async () => {
+    if (!isPremium) {
+      setShowUpgradeModal(true);
+      return;
+    }
     if (isExporting) return;
     setIsExporting(true);
     try {

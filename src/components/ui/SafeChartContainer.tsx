@@ -69,9 +69,14 @@ export function SafeChartContainer({
         className="safe-chart-container w-full h-full min-w-0 flex-shrink-0"
       >
         {shouldRenderChart ? (
-          <ResponsiveContainer width="100%" height="100%">
-            {children}
-          </ResponsiveContainer>
+          React.isValidElement(children) ? (
+            React.cloneElement(children as React.ReactElement<any>, {
+              width: size.width,
+              height: size.height,
+            })
+          ) : (
+            children
+          )
         ) : (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-50/20 dark:bg-slate-900/10 rounded-2xl p-4 transition-all duration-300">
             {isLoading ? (

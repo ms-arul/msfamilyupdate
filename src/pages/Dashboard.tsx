@@ -4,6 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import { useFinance } from '../context/FinanceContext';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
+import { getUserStorageUsage, formatBytes } from '../utils/storageService';
+import { useSubscription } from '../context/SubscriptionContext';
 import { supabase } from '../lib/supabase';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -38,6 +40,7 @@ import {
   CartesianGrid,
 } from 'recharts';
 import { SafeChartContainer } from '../components/ui/SafeChartContainer';
+import { PROVERBS } from '../utils/proverbs';
 
 // Dashboard-local glass styles are now in index.css for better performance
 
@@ -513,6 +516,137 @@ const SectionTitle: React.FC<SectionTitleProps> = ({
 );
 
 // ============================================================================
+// Typing Greeting Component (AI-style chat response typewriter animation)
+// ============================================================================
+interface TypingGreetingProps {
+  prefix: string;
+  name: string;
+  suffix: string;
+  iconSrc: string;
+}
+
+const TypingGreeting: React.FC<TypingGreetingProps> = React.memo(({ prefix, name, suffix, iconSrc }) => {
+  const fullText = prefix + name + suffix;
+  const [displayedLength, setDisplayedLength] = useState(0);
+
+  useEffect(() => {
+    setDisplayedLength(0);
+    
+    let index = 0;
+    const interval = setInterval(() => {
+      index += 1;
+      setDisplayedLength(index);
+      if (index >= fullText.length) {
+        clearInterval(interval);
+      }
+    }, 15); // Fast, active typewriter animation (15ms per character)
+
+    return () => clearInterval(interval);
+  }, [prefix, name, suffix, fullText.length]);
+
+  const renderContent = () => {
+    const showCursor = displayedLength < fullText.length;
+    const cursor = showCursor ? (
+      <span className="inline-block w-1.5 h-3 ml-0.5 bg-primary-500 dark:bg-primary-400 animate-pulse rounded-sm align-middle" />
+    ) : null;
+
+    if (displayedLength <= prefix.length) {
+      return (
+        <>
+          <span>{prefix.slice(0, displayedLength)}</span>
+          {cursor}
+        </>
+      );
+    }
+    if (displayedLength <= prefix.length + name.length) {
+      const nameLength = displayedLength - prefix.length;
+      return (
+        <>
+          <span>{prefix}</span>
+          <span className="font-bold text-slate-800 dark:text-slate-100">{name.slice(0, nameLength)}</span>
+          {cursor}
+        </>
+      );
+    }
+    const suffixLength = displayedLength - prefix.length - name.length;
+    return (
+      <>
+        <span>{prefix}</span>
+        <span className="font-bold text-slate-800 dark:text-slate-100">{name}</span>
+        <span>{suffix.slice(0, suffixLength)}</span>
+        {cursor}
+      </>
+    );
+  };
+
+  return (
+    <div
+      className="g-pill inline-flex items-center gap-2.5 px-3.5 py-1.5 select-none max-w-full overflow-hidden"
+      style={{ borderRadius: '16px' }}
+    >
+      <span className="flex items-center justify-center shrink-0">
+        <img
+          src={iconSrc}
+          alt="Greeting icon"
+          className="w-[22px] h-[22px] object-contain shrink-0"
+        />
+      </span>
+      <span className="block text-[10px] sm:text-[11px] font-semibold tracking-wide text-slate-600 dark:text-slate-300 line-clamp-2 max-w-[calc(100vw-6rem)]">
+        {renderContent()}
+      </span>
+    </div>
+  );
+});
+
+TypingGreeting.displayName = 'TypingGreeting';
+
+const mapWeatherCodeToIcon = (code: number, isDay: boolean, hour: number, dateDay: number): string => {
+  if (isDay) {
+    if ([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82].includes(code)) {
+      return '/greeting_icons/cloud-with-rain.png';
+    }
+    if ([95, 96, 99].includes(code)) {
+      return '/greeting_icons/cloud-with-lightning-and-rain.png';
+    }
+    if ([71, 73, 75, 77, 85, 86].includes(code)) {
+      return '/greeting_icons/cloud-with-snow.png';
+    }
+    if ([2, 3, 45, 48].includes(code)) {
+      return '/greeting_icons/cloud.png';
+    }
+    if (code === 0 || code === 1) {
+      if (hour >= 5 && hour < 9) return '/greeting_icons/sunrise.png';
+      if (hour >= 17 && hour < 19) return '/greeting_icons/sunset.png';
+      if (hour >= 12 && hour < 17) return '/greeting_icons/afternoon.png';
+      return '/greeting_icons/sun.png';
+    }
+  } else {
+    if ([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82].includes(code)) {
+      return '/greeting_icons/cloud-with-rain.png';
+    }
+    if ([95, 96, 99].includes(code)) {
+      return '/greeting_icons/cloud-with-lightning-and-rain.png';
+    }
+    if ([71, 73, 75, 77, 85, 86].includes(code)) {
+      return '/greeting_icons/cloud-with-snow.png';
+    }
+    if ([2, 3, 45, 48].includes(code)) {
+      return '/greeting_icons/cloud.png';
+    }
+    const moonIcons = [
+      '/greeting_icons/fullmoon.png',
+      '/greeting_icons/halfmoon.png',
+      '/greeting_icons/moonrightquater.png',
+      '/greeting_icons/fullblackmoon.png',
+      '/greeting_icons/waning-crescent-moon.png',
+      '/greeting_icons/waxing-gibbous-moon.png'
+    ];
+    return moonIcons[dateDay % moonIcons.length];
+  }
+  return '/greeting_icons/sun.png';
+};
+
+// ============================================================================
 // Main Dashboard
 // ============================================================================
 export default function Dashboard() {
@@ -530,7 +664,8 @@ export default function Dashboard() {
     todaySmsCount = 0,
   } = useFinance();
   const { user } = useAuth();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  const { planId, isPremium, expiresAt, setShowUpgradeModal } = useSubscription();
   const navigate = useNavigate();
 
 
@@ -541,6 +676,71 @@ export default function Dashboard() {
   const [graphFilter, setGraphFilter] = useState<string>('Month');
   const [isFullscreenGraph, setIsFullscreenGraph] = useState<boolean>(false);
   const [balanceFilter, setBalanceFilter] = useState<string>('This Month');
+  const [storageUsage, setStorageUsage] = useState<{ usedBytes: number; limitBytes: number; percentage: number } | null>(null);
+  const [weatherData, setWeatherData] = useState<{ code: number; isDay: boolean } | null>(null);
+
+  // Load weather from Open-Meteo based on current geolocation coordinates
+  useEffect(() => {
+    let active = true;
+    async function loadWeather() {
+      try {
+        const { getCurrentLocation } = await import('../utils/trackingService');
+        const pos = await getCurrentLocation();
+        let lat = 13.0827; // Chennai fallback
+        let lon = 80.2707;
+        if (pos?.coords) {
+          lat = pos.coords.latitude;
+          lon = pos.coords.longitude;
+        }
+        const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=weather_code,is_day`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.current && active) {
+            setWeatherData({
+              code: data.current.weather_code,
+              isDay: data.current.is_day === 1
+            });
+          }
+        }
+      } catch (err) {
+        console.warn('Weather fetch failed:', err);
+      }
+    }
+    loadWeather();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const daysRemaining = useMemo(() => {
+    if (!expiresAt) return null;
+    const diff = new Date(expiresAt).getTime() - Date.now();
+    return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+  }, [expiresAt]);
+
+  // Load storage usage
+  useEffect(() => {
+    const userId = user?.id;
+    if (!userId) return;
+    let active = true;
+
+    async function loadStorage() {
+      try {
+        const data = await getUserStorageUsage(userId!);
+        if (active) {
+          setStorageUsage(data);
+        }
+      } catch (err) {
+        console.warn('Failed to load storage usage:', err);
+      }
+    }
+
+    loadStorage();
+
+    return () => {
+      active = false;
+    };
+  }, [user?.id, transactions]);
 
   // ── Filtered Balance Stats based on balance filter ──
   const filteredStats = useMemo(() => {
@@ -671,31 +871,40 @@ export default function Dashboard() {
     if (!user?.name) return null;
     const hour = currentDate.getHours();
 
-    // 1. Time-based compact greeting prefix and matching icon
+    // 1. Time-based compact greeting prefix
     let timeGreeting = '';
-    let iconSrc = '';
-
-    if (hour >= 5 && hour < 9) {
+    if (hour >= 5 && hour < 12) {
       timeGreeting = t('Good morning');
-      iconSrc = '/greeting_icons/sunrise.png';
-    } else if (hour >= 9 && hour < 12) {
-      timeGreeting = t('Good morning');
-      iconSrc = '/greeting_icons/sun.png';
     } else if (hour >= 12 && hour < 17) {
       timeGreeting = t('Good afternoon');
-      iconSrc = '/greeting_icons/afternoon.png';
     } else if (hour >= 17 && hour < 19) {
       timeGreeting = t('Good evening');
-      iconSrc = '/greeting_icons/sunset.png';
     } else {
       timeGreeting = t('Good night');
-      const moonIcons = [
-        '/greeting_icons/fullmoon.png',
-        '/greeting_icons/halfmoon.png',
-        '/greeting_icons/moonrightquater.png',
-        '/greeting_icons/fullblackmoon.png'
-      ];
-      iconSrc = moonIcons[currentDate.getDate() % moonIcons.length];
+    }
+
+    let iconSrc = '';
+    if (weatherData) {
+      iconSrc = mapWeatherCodeToIcon(weatherData.code, weatherData.isDay, hour, currentDate.getDate());
+    } else {
+      // Time-based default fallback
+      if (hour >= 5 && hour < 9) {
+        iconSrc = '/greeting_icons/sunrise.png';
+      } else if (hour >= 9 && hour < 12) {
+        iconSrc = '/greeting_icons/sun.png';
+      } else if (hour >= 12 && hour < 17) {
+        iconSrc = '/greeting_icons/afternoon.png';
+      } else if (hour >= 17 && hour < 19) {
+        iconSrc = '/greeting_icons/sunset.png';
+      } else {
+        const moonIcons = [
+          '/greeting_icons/fullmoon.png',
+          '/greeting_icons/halfmoon.png',
+          '/greeting_icons/moonrightquater.png',
+          '/greeting_icons/fullblackmoon.png'
+        ];
+        iconSrc = moonIcons[currentDate.getDate() % moonIcons.length];
+      }
     }
 
     // Use only first name/part to keep it extremely short and clean
@@ -734,32 +943,21 @@ export default function Dashboard() {
 
     // AI financial tips (friendly and encouraging)
     const tips = [
-      t("Let's make today a great savings day! "),
-      t("Every little rupee saved counts! "),
+      t("Let's make today a great savings day!"),
+      t("Every little rupee saved counts!"),
       t("Consistent saving builds big dreams."),
       t("Tracking your spends is the first step to freedom."),
-      t("Remember to review your daily transactions! "),
-      t("You're doing great with your budget, keep it up! "),
-      t("Hope you're having a wonderful day! Keep smiling. "),
+      t("Remember to review your daily transactions!"),
+      t("You're doing great with your budget, keep it up!"),
+      t("Hope you're having a wonderful day! Keep smiling."),
       t("Small steps everyday lead to big savings. Proud of you!")
     ];
 
-    // Tamil proverbs & kurals — always shown in Tamil regardless of language
-    const proverbs = [
-      "ஊழையும் உப்பக்கம் காண்பர் உலைவின்றித் தாழாது உஞற்று பவர்.",
-      "தெய்வத்தான் ஆகா தெனினும் முயற்சிதன் மெய்வருத்தக் கூலி தரும்.",
-      "தீயினாற் சுட்டபுண் உள்ளாறும் ஆறாதே நாவினாற் சுட்ட வடு.",
-      "யானை படுத்தாலும் குதிரை மட்டம்.",
-      "ஆடத் தெரியாதவள் முற்றம் கோணல் என்றாளாம்.",
-      "நாய் விற்ற காசு குரைக்கவா செய்யும்?",
-      "அடிமேல் அடி அடித்தால், அம்மியும் நகரும்.",
-      "ஒரு மாட்டுக்கு ஒரு சூடு, ஒரு மனிதனுக்கு ஒரு சொல்.",
-      "வாராத இடத்திற்குப் போகாதே, மதியாதார் வாசலை மிதிக்காதே.",
-      "வல்லவனுக்குப் புல்லும் ஆயுதம்."
-    ];
+    // Localized proverbs & quotes based on current active language
+    const localizedProverbs = PROVERBS[language] || PROVERBS['en'] || [];
 
     insights.push(...tips);
-    insights.push(...proverbs);
+    insights.push(...localizedProverbs);
 
     // Pick a random insight or rotate based on time/minutes
     const seed = currentDate.getMinutes() + currentDate.getDate();
@@ -772,7 +970,7 @@ export default function Dashboard() {
       suffix: `! ${chosenInsight}`,
       iconSrc
     };
-  }, [user?.name, filteredStats.expense, budgetLimit, isOverBudget, goalProgress, savingsGoal.name, allTimePersonalBalance, savingsRate, todaySmsCount, smsTransactionCount, currentDate, t]);
+  }, [user?.name, filteredStats.expense, budgetLimit, isOverBudget, goalProgress, savingsGoal.name, allTimePersonalBalance, savingsRate, todaySmsCount, smsTransactionCount, currentDate, t, language, weatherData]);
 
   return (
     <motion.div variants={container} initial="hidden" animate="show" className="space-y-3 sm:space-y-4 pb-4">
@@ -780,21 +978,12 @@ export default function Dashboard() {
       {/* ── Greeting Pill ── */}
       {greeting && (
         <motion.div variants={item}>
-          <div
-            className="g-pill inline-flex items-center gap-2.5 px-3.5 py-1.5 select-none max-w-full overflow-hidden"
-            style={{ borderRadius: '16px' }}
-          >
-            <span className="flex items-center justify-center shrink-0">
-              <img
-                src={greeting.iconSrc}
-                alt="Greeting icon"
-                className="w-[22px] h-[22px] object-contain shrink-0"
-              />
-            </span>
-            <span className="block text-[10px] sm:text-[11px] font-semibold tracking-wide text-slate-600 dark:text-slate-300 line-clamp-2 max-w-[calc(100vw-6rem)]">
-              {greeting.prefix}<span className="font-bold">{greeting.name}</span>{greeting.suffix}
-            </span>
-          </div>
+          <TypingGreeting
+            prefix={greeting.prefix}
+            name={greeting.name}
+            suffix={greeting.suffix}
+            iconSrc={greeting.iconSrc}
+          />
         </motion.div>
       )}
 
@@ -894,6 +1083,101 @@ export default function Dashboard() {
                 <span className="text-xs font-black text-cyan-600 dark:text-cyan-400">{smsTransactionCount}</span>
               </div>
               <ChevronRight size={15} className="text-slate-300 group-hover:text-cyan-500 group-hover:translate-x-0.5 transition-all" />
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      {/* ── Premium Subscription & Storage Card (Placed under SMS widget) ── */}
+      {storageUsage && (
+        <motion.div
+          variants={item}
+          whileTap={{ scale: 0.985 }}
+          onClick={() => navigate('/settings/manage-storage')}
+          className="g-panel p-4 sm:p-5 overflow-hidden group relative cursor-pointer"
+        >
+          <div className="absolute inset-0 bg-gradient-to-r from-primary-500/5 to-secondary-500/5 pointer-events-none dark:hidden" />
+          <div className="relative z-10 space-y-4">
+            {/* Header: Plan & Action */}
+            <div className="flex justify-between items-start">
+              <div>
+                <span className="text-[9px] font-bold text-primary-500 uppercase tracking-widest block mb-0.5">{t('Membership & Cloud')}</span>
+                <div className="flex items-center gap-2">
+                  <h4 className="text-sm font-black text-slate-800 dark:text-slate-100 capitalize">
+                    {planId === 'personal_monthly' ? t('Personal Premium Monthly') :
+                     planId === 'personal_yearly' ? t('Personal Premium Yearly') :
+                     planId === 'family_monthly' ? t('Family Premium Monthly') :
+                     planId === 'family_yearly' ? t('Family Premium Yearly') :
+                     t(planId.replace(/_/g, ' '))}
+                  </h4>
+                  <span className={`text-[9px] font-black px-2 py-0.5 rounded-[6px] uppercase ${
+                    isPremium
+                      ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/20'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-500 border border-slate-200/50 dark:border-slate-700/50'
+                  }`}>
+                    {isPremium ? t('Premium') : t('Free')}
+                  </span>
+                </div>
+              </div>
+
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowUpgradeModal(true);
+                }}
+                className="px-3 py-1.5 rounded-xl bg-primary-500 hover:bg-primary-600 text-white font-extrabold text-[10px] shadow-sm transition-colors relative z-10"
+              >
+                {isPremium ? t('Manage') : t('Upgrade')}
+              </button>
+            </div>
+
+            {/* Storage Progress */}
+            <div>
+              <div className="flex justify-between text-[10px] text-slate-400 mb-1.5">
+                <span>{t('Shared Storage')}</span>
+                <span className="font-bold">
+                  {formatBytes(storageUsage.usedBytes)} / {formatBytes(storageUsage.limitBytes)} ({storageUsage.percentage}%)
+                </span>
+              </div>
+              <div className="w-full h-1.5 rounded-full bg-slate-100 dark:bg-slate-800/80 overflow-hidden border border-slate-200/10 dark:border-white/5 shadow-inner">
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${storageUsage.percentage}%` }}
+                  transition={{ duration: 0.8, ease: 'easeOut' }}
+                  className={`h-full rounded-full ${
+                    storageUsage.percentage > 80
+                      ? 'bg-gradient-to-r from-rose-500 to-red-600 shadow-[0_0_8px_rgba(244,63,94,0.3)]'
+                      : storageUsage.percentage > 50
+                        ? 'bg-gradient-to-r from-amber-400 to-orange-500 shadow-[0_0_8px_rgba(245,158,11,0.3)]'
+                        : 'bg-gradient-to-r from-emerald-400 to-teal-500 shadow-[0_0_8px_rgba(16,185,129,0.3)]'
+                  }`}
+                />
+              </div>
+            </div>
+
+            {/* Metadata Footer: Renew Date / Days Remaining / Coupon */}
+            <div className="flex justify-between items-center text-[10px] text-slate-500 dark:text-slate-400 border-t border-slate-200/30 dark:border-white/5 pt-3">
+              {expiresAt ? (
+                <div>
+                  <span className="text-slate-400">{t('Renews on')}: </span>
+                  <span className="font-bold text-slate-700 dark:text-slate-300">
+                    {new Date(expiresAt).toLocaleDateString()}
+                  </span>
+                  {daysRemaining !== null && (
+                    <span className="ml-1 text-primary-500 dark:text-primary-400 font-bold">
+                      ({daysRemaining} {t('days left')})
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <div className="text-slate-400 font-semibold">{t('Basic storage limits applied')}</div>
+              )}
+
+              {isPremium && (
+                <div className="flex items-center gap-1 text-[9px] font-black uppercase text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
+                  {t('Active Coupon')}
+                </div>
+              )}
             </div>
           </div>
         </motion.div>

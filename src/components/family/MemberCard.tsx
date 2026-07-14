@@ -41,10 +41,10 @@ export const FamilyMemberCard: React.FC<FamilyMemberCardProps> = ({
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.05, duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-      className="glass-panel p-4 relative overflow-hidden group"
+      className={`glass-panel p-4 relative group ${showActions ? 'z-30' : 'z-10'}`}
     >
       {/* Hover gradient */}
-      <div className={`absolute inset-0 bg-gradient-to-t ${gradient} opacity-0 group-hover:opacity-[0.06] transition-opacity duration-500 pointer-events-none`} />
+      <div className={`absolute inset-0 rounded-[1.25rem] bg-gradient-to-t ${gradient} opacity-0 group-hover:opacity-[0.06] transition-opacity duration-500 pointer-events-none`} />
 
       <div className="relative z-10 flex items-center gap-3">
         {/* Avatar */}

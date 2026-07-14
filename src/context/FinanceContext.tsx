@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { supabase } from '../lib/supabase';
 import { saveSinglePreference } from '../utils/preferencesService';
 import { useAuth } from './AuthContext';
-import { getCachedTransactions, cacheTransactions } from '../utils/transactionCacheService';
+import { useFamily } from './FamilyContext';
+import { getCachedTransactions, cacheTransactions, clearTransactionCache } from '../utils/transactionCacheService';
 import { createSafeContext } from './contextHelper';
 import { Transaction, TransactionType, SavingsGoal } from '../types/finance';
 import { getNetworkStatus, onNetworkChange } from '../utils/networkService';
@@ -33,6 +34,15 @@ export interface FinanceContextType {
     date: string;
     notes: string;
     memberId: string;
+    proofUrl?: string | null;
+  }) => Promise<void>;
+  updateTransaction: (id: string, updates: {
+    amount?: number;
+    category?: string;
+    type?: TransactionType;
+    date?: string;
+    notes?: string;
+    memberId?: string;
     proofUrl?: string | null;
   }) => Promise<void>;
   addSmsTransaction: (parsedSms: any) => Promise<void>;
@@ -97,6 +107,34 @@ function savePendingSms(entries: PendingSmsEntry[]): void {
   } catch {}
 }
 
+// ── Helper: Map DB row to Transaction ────────────────────────────────────────
+function mapDbToTransaction(tx: any): Transaction {
+  const d = new Date(tx.date);
+  return {
+    id: tx.id,
+    amount: Number(tx.amount),
+    category: tx.category,
+    type: tx.type as TransactionType,
+    date: tx.date,
+    month: d.getMonth() + 1,
+    year: d.getFullYear(),
+    notes: tx.notes || '',
+    memberId: tx.member_id,
+    memberName: (tx.profiles as any)?.name || 'Unknown',
+    proofUrl: tx.proof_url || null,
+    created_at: tx.created_at,
+    familyId: tx.family_id || null,
+    updatedAt: tx.updated_at || null,
+    editedBy: tx.edited_by || null,
+    editCount: tx.edit_count || 0,
+    source: tx.source || 'manual',
+    bankName: tx.bank_name || null,
+    merchantName: tx.merchant_name || null,
+    smsConfidence: tx.sms_confidence || null,
+    smsReference: tx.sms_reference || null,
+  };
+}
+
 // Global static queue and dedup set to survive state updates
 let insertQueue = Promise.resolve();
 const inMemoryDedupSet = new Set<string>();
@@ -124,11 +162,38 @@ export const FinanceProvider: React.FC<FinanceProviderProps> = ({ children }) =>
   });
   const { user } = useAuth();
 
-  // Create a ref for user to avoid stale closures in listeners
+  // ── Family Context Integration ─────────────────────────────────────────────
+  let familyId: string | null = null;
+  try {
+    const familyCtx = useFamily();
+    familyId = familyCtx.family?.id || null;
+  } catch {
+    // FamilyContext may not be available during initial mount
+    familyId = null;
+  }
+
+  // Create refs for user and familyId to avoid stale closures in listeners
   const userRef = useRef(user);
   useEffect(() => {
     userRef.current = user;
   }, [user]);
+
+  const familyIdRef = useRef(familyId);
+  useEffect(() => {
+    familyIdRef.current = familyId;
+  }, [familyId]);
+
+  // ── Clear cache when family changes ────────────────────────────────────────
+  const prevFamilyIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (prevFamilyIdRef.current !== null && prevFamilyIdRef.current !== familyId) {
+      // Family changed — clear stale data
+      console.log('[Finance] Family changed, clearing cache');
+      setTransactions([]);
+      clearTransactionCache();
+    }
+    prevFamilyIdRef.current = familyId;
+  }, [familyId]);
 
   useEffect(() => {
     const handleStorageChange = () => {
@@ -165,8 +230,10 @@ export const FinanceProvider: React.FC<FinanceProviderProps> = ({ children }) =>
 
   const lastFetchTimeRef = useRef<number>(0);
 
+  // ── Fetch Transactions — FAMILY SCOPED ─────────────────────────────────────
   const fetchTransactions = useCallback(async (loadAll = false) => {
     const currentUserId = userRef.current?.id;
+    const currentFamilyId = familyIdRef.current;
     if (!currentUserId) {
       setTransactions([]);
       setLoading(false);
@@ -176,7 +243,7 @@ export const FinanceProvider: React.FC<FinanceProviderProps> = ({ children }) =>
     // Debounce: prevent rapid consecutive calls (within 1s)
     const now = Date.now();
     if (now - lastFetchTimeRef.current < 1000) {
-      console.log('[Context] Fetch call debounced (too rapid)');
+      console.log('[Finance] Fetch call debounced (too rapid)');
       return;
     }
     lastFetchTimeRef.current = now;
@@ -203,12 +270,12 @@ export const FinanceProvider: React.FC<FinanceProviderProps> = ({ children }) =>
     // 2. If offline, skip Supabase and use cache only
     const { isOnline } = getNetworkStatus();
     if (!isOnline) {
-      console.log('[Context] Offline — using cached transactions only');
+      console.log('[Finance] Offline — using cached transactions only');
       setLoading(false);
       return;
     }
 
-    // 3. Fetch latest in background with retry fallback
+    // 3. Fetch latest in background with retry fallback — FAMILY SCOPED
     let attempt = 0;
     const maxAttempts = 3;
     let success = false;
@@ -221,8 +288,14 @@ export const FinanceProvider: React.FC<FinanceProviderProps> = ({ children }) =>
           .select(`
             *,
             profiles:profiles!transactions_member_id_fkey ( name )
-          `)
-          .eq('member_id', currentUserId);
+          `);
+
+        // CRITICAL: Scope by family_id if available, otherwise fall back to member_id
+        if (currentFamilyId) {
+          query = query.eq('family_id', currentFamilyId);
+        } else {
+          query = query.eq('member_id', currentUserId);
+        }
 
         if (!loadAll) {
           const ninetyDaysAgo = new Date();
@@ -235,28 +308,7 @@ export const FinanceProvider: React.FC<FinanceProviderProps> = ({ children }) =>
 
         if (error) throw error;
 
-        const mapped = (data || []).map(tx => {
-          const d = new Date(tx.date);
-          return {
-            id: tx.id,
-            amount: Number(tx.amount),
-            category: tx.category,
-            type: tx.type as TransactionType,
-            date: tx.date,
-            month: d.getMonth() + 1,
-            year: d.getFullYear(),
-            notes: tx.notes || '',
-            memberId: tx.member_id,
-            memberName: (tx.profiles as any)?.name || 'Unknown',
-            proofUrl: tx.proof_url || null,
-            created_at: tx.created_at,
-            source: tx.source || 'manual',
-            bankName: tx.bank_name || null,
-            merchantName: tx.merchant_name || null,
-            smsConfidence: tx.sms_confidence || null,
-            smsReference: tx.sms_reference || null,
-          };
-        });
+        const mapped = (data || []).map(mapDbToTransaction);
 
         setTransactions(mapped.slice(0, 1000));
         
@@ -264,7 +316,7 @@ export const FinanceProvider: React.FC<FinanceProviderProps> = ({ children }) =>
         await cacheTransactions(mapped);
         success = true;
       } catch (err: any) {
-        console.error(`[Context] Error fetching transactions (attempt ${attempt}/${maxAttempts}):`, err);
+        console.error(`[Finance] Error fetching transactions (attempt ${attempt}/${maxAttempts}):`, err);
         if (err && typeof err === 'object') {
           console.error(
             'Relationship Error',
@@ -283,19 +335,65 @@ export const FinanceProvider: React.FC<FinanceProviderProps> = ({ children }) =>
 
   useEffect(() => {
     fetchTransactions();
-  }, [fetchTransactions, user]);
+  }, [fetchTransactions, user, familyId]);
+
+  // ── Realtime subscription — FAMILY SCOPED (BUG 9) ─────────────────────────
+  useEffect(() => {
+    if (!user) return;
+    const currentFamilyId = familyId;
+
+    // Build filter: scope by family_id if available
+    const filterStr = currentFamilyId
+      ? `family_id=eq.${currentFamilyId}`
+      : `member_id=eq.${user.id}`;
+
+    const channel = supabase
+      .channel(`transactions_realtime_${currentFamilyId || user.id}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'transactions',
+        filter: filterStr,
+      }, (payload) => {
+        // Auto-refresh on any transaction change (BUG 9)
+        // Debounced via fetchTransactions internal debounce
+        if (payload.eventType === 'INSERT') {
+          const newTx = mapDbToTransaction(payload.new);
+          setTransactions(prev => {
+            if (prev.some(t => t.id === newTx.id)) return prev;
+            return [newTx, ...prev].slice(0, 1000);
+          });
+        } else if (payload.eventType === 'UPDATE') {
+          const updatedTx = mapDbToTransaction(payload.new);
+          setTransactions(prev =>
+            prev.map(t => t.id === updatedTx.id ? updatedTx : t)
+          );
+        } else if (payload.eventType === 'DELETE') {
+          const deletedId = (payload.old as any)?.id;
+          if (deletedId) {
+            setTransactions(prev => prev.filter(t => t.id !== deletedId));
+          }
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, familyId]);
 
   // Auto-refetch when network comes back online
   useEffect(() => {
     const unsub = onNetworkChange((isOnline) => {
       if (isOnline && userRef.current?.id) {
-        console.log('[Context] Network restored — auto-refetching transactions');
+        console.log('[Finance] Network restored — auto-refetching transactions');
         fetchTransactions();
       }
     });
     return unsub;
   }, [fetchTransactions]);
 
+  // ── Add Transaction — with family_id ───────────────────────────────────────
   const addTransaction = async (transaction: {
     amount: number;
     category: string;
@@ -306,6 +404,8 @@ export const FinanceProvider: React.FC<FinanceProviderProps> = ({ children }) =>
     proofUrl?: string | null;
   }) => {
     try {
+      const currentFamilyId = familyIdRef.current;
+
       const { data, error } = await supabase
         .from('transactions')
         .insert({
@@ -316,6 +416,7 @@ export const FinanceProvider: React.FC<FinanceProviderProps> = ({ children }) =>
           notes: transaction.notes,
           member_id: transaction.memberId,
           proof_url: transaction.proofUrl || null,
+          family_id: currentFamilyId,
         })
         .select(`
           *,
@@ -325,27 +426,7 @@ export const FinanceProvider: React.FC<FinanceProviderProps> = ({ children }) =>
 
       if (error) throw error;
 
-      const d = new Date(data.date);
-      const newTx: Transaction = {
-        id: data.id,
-        amount: Number(data.amount),
-        category: data.category,
-        type: data.type as TransactionType,
-        date: data.date,
-        month: d.getMonth() + 1,
-        year: d.getFullYear(),
-        notes: data.notes || '',
-        memberId: data.member_id,
-        memberName: (data.profiles as any)?.name || 'Unknown',
-        proofUrl: data.proof_url || null,
-        created_at: data.created_at,
-        source: data.source || 'manual',
-        bankName: data.bank_name || null,
-        merchantName: data.merchant_name || null,
-        smsConfidence: data.sms_confidence || null,
-        smsReference: data.sms_reference || null,
-      };
-
+      const newTx = mapDbToTransaction(data);
       setTransactions(prev => [newTx, ...prev].slice(0, 1000));
     } catch (err: any) {
       console.error('Error adding transaction:', err);
@@ -359,16 +440,144 @@ export const FinanceProvider: React.FC<FinanceProviderProps> = ({ children }) =>
     }
   };
 
+  // ── Update Transaction (BUG 3) ────────────────────────────────────────────
+  const updateTransaction = async (id: string, updates: {
+    amount?: number;
+    category?: string;
+    type?: TransactionType;
+    date?: string;
+    notes?: string;
+    memberId?: string;
+    proofUrl?: string | null;
+  }) => {
+    const currentUserId = userRef.current?.id;
+    if (!currentUserId) throw new Error('Not authenticated');
+
+    // Build DB update payload
+    const dbUpdates: Record<string, any> = {};
+    if (updates.amount !== undefined) dbUpdates.amount = updates.amount;
+    if (updates.category !== undefined) dbUpdates.category = updates.category;
+    if (updates.type !== undefined) dbUpdates.type = updates.type;
+    if (updates.date !== undefined) dbUpdates.date = updates.date;
+    if (updates.notes !== undefined) dbUpdates.notes = updates.notes;
+    if (updates.memberId !== undefined) dbUpdates.member_id = updates.memberId;
+    if (updates.proofUrl !== undefined) dbUpdates.proof_url = updates.proofUrl;
+    dbUpdates.edited_by = currentUserId;
+
+    try {
+      // Get current transaction for audit log
+      const { data: currentTx } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      // Optimistic UI update
+      setTransactions(prev =>
+        prev.map(t => {
+          if (t.id !== id) return t;
+          const d = updates.date ? new Date(updates.date) : undefined;
+          return {
+            ...t,
+            ...(updates.amount !== undefined && { amount: updates.amount }),
+            ...(updates.category !== undefined && { category: updates.category }),
+            ...(updates.type !== undefined && { type: updates.type }),
+            ...(updates.date !== undefined && { date: updates.date, month: d!.getMonth() + 1, year: d!.getFullYear() }),
+            ...(updates.notes !== undefined && { notes: updates.notes }),
+            ...(updates.memberId !== undefined && { memberId: updates.memberId }),
+            ...(updates.proofUrl !== undefined && { proofUrl: updates.proofUrl }),
+            editedBy: currentUserId,
+            editCount: (t.editCount || 0) + 1,
+            updatedAt: new Date().toISOString(),
+          };
+        })
+      );
+
+      // Perform DB update
+      const { data, error } = await supabase
+        .from('transactions')
+        .update({
+          ...dbUpdates,
+          edited_by: currentUserId,
+          edit_count: (currentTx?.edit_count || 0) + 1,
+        })
+        .eq('id', id)
+        .select(`
+          *,
+          profiles:profiles!transactions_member_id_fkey ( name )
+        `)
+        .single();
+
+      if (error) throw error;
+
+      // Create audit log entry
+      if (currentTx) {
+        const changes: Record<string, any> = {};
+        const previousValues: Record<string, any> = {};
+        for (const [key, val] of Object.entries(dbUpdates)) {
+          if (key === 'edited_by' || key === 'edit_count') continue;
+          if (currentTx[key] !== val) {
+            changes[key] = val;
+            previousValues[key] = currentTx[key];
+          }
+        }
+        if (Object.keys(changes).length > 0) {
+          await supabase.from('transaction_audit_log').insert({
+            transaction_id: id,
+            edited_by: currentUserId,
+            action: 'updated',
+            changes,
+            previous_values: previousValues,
+          });
+        }
+      }
+
+      // Update with server response
+      if (data) {
+        const updatedTx = mapDbToTransaction(data);
+        setTransactions(prev =>
+          prev.map(t => t.id === id ? updatedTx : t)
+        );
+      }
+    } catch (err: any) {
+      console.error('Error updating transaction:', err);
+      // Revert optimistic update by refetching
+      fetchTransactions();
+      throw err;
+    }
+  };
+
   const deleteTransaction = async (id: string) => {
     try {
+      // Optimistic UI update
+      setTransactions(prev => prev.filter(t => t.id !== id));
+
       const { error } = await supabase
         .from('transactions')
         .delete()
         .eq('id', id);
 
-      if (error) throw error;
+      if (error) {
+        // Revert on failure
+        fetchTransactions();
+        throw error;
+      }
 
-      setTransactions(prev => prev.filter(t => t.id !== id));
+      // Create audit log entry
+      const currentUserId = userRef.current?.id;
+      if (currentUserId) {
+        try {
+          await supabase.from('transaction_audit_log').insert({
+            transaction_id: id,
+            edited_by: currentUserId,
+            action: 'deleted',
+            changes: {},
+            previous_values: {},
+          });
+        } catch {
+          // Audit logging is best-effort
+        }
+      }
     } catch (err) {
       console.error('Error deleting transaction:', err);
     }
@@ -377,6 +586,7 @@ export const FinanceProvider: React.FC<FinanceProviderProps> = ({ children }) =>
   // ── SMS Transaction Auto-Add with Queue & Dedup ──────────────────────────────
   const processSingleSmsTransaction = useCallback(async (parsedSms: any) => {
     const currentUserId = userRef.current?.id;
+    const currentFamilyId = familyIdRef.current;
     if (!currentUserId) {
       throw new Error('No authenticated user available for SMS transaction insertion');
     }
@@ -385,7 +595,7 @@ export const FinanceProvider: React.FC<FinanceProviderProps> = ({ children }) =>
     const dedupKey = parsedSms.referenceNumber || `SMS-${Number(parsedSms.amount)}-${cleanDate}-${(parsedSms.bankName || 'unknown').replace(/\s+/g, '')}`;
     
     if (inMemoryDedupSet.has(dedupKey)) {
-      console.log('[SMS Context] Prevented duplicate in-memory insert for key:', dedupKey);
+      console.log('[SMS Finance] Prevented duplicate in-memory insert for key:', dedupKey);
       return;
     }
     inMemoryDedupSet.add(dedupKey);
@@ -402,7 +612,7 @@ export const FinanceProvider: React.FC<FinanceProviderProps> = ({ children }) =>
     // ── LOW CONFIDENCE CHECK: route to pending queue ──
     const confidence = parsedSms.confidence || 0;
     if (confidence < 0.70) {
-      console.log(`[SMS Context] Low confidence (${(confidence * 100).toFixed(0)}%) — routing to pending queue`);
+      console.log(`[SMS Finance] Low confidence (${(confidence * 100).toFixed(0)}%) — routing to pending queue`);
       setPendingSmsTransactions(prev => {
         const updated = [...prev, { parsedSms, timestamp: Date.now() }];
         savePendingSms(updated);
@@ -411,7 +621,7 @@ export const FinanceProvider: React.FC<FinanceProviderProps> = ({ children }) =>
       return;
     }
 
-    console.log('[SMS Context] Processing queued SMS insert for key:', dedupKey);
+    console.log('[SMS Finance] Processing queued SMS insert for key:', dedupKey);
 
     // Build notes with full SMS body
     const noteParts: string[] = [];
@@ -425,7 +635,6 @@ export const FinanceProvider: React.FC<FinanceProviderProps> = ({ children }) =>
     const insertData = {
       amount: Number(parsedSms.amount),
       category: parsedSms.suggestedCategory || 'Other',
-      // Handle both JS parser ('credit'/'debit') and native parser ('income'/'expense') formats
       type: (parsedSms.transactionType === 'credit' || parsedSms.transactionType === 'income') ? 'income' : 'expense',
       date: cleanDate,
       notes: fullNotes,
@@ -436,6 +645,7 @@ export const FinanceProvider: React.FC<FinanceProviderProps> = ({ children }) =>
       merchant_name: parsedSms.merchantName || null,
       sms_confidence: parsedSms.confidence || null,
       sms_reference: dedupKey,
+      family_id: currentFamilyId,
     };
 
     let attempt = 0;
@@ -459,7 +669,7 @@ export const FinanceProvider: React.FC<FinanceProviderProps> = ({ children }) =>
 
         if (error) {
           if (error.code === '23505') {
-            console.log('[SMS Context] Unique constraint violation (duplicate) prevented by Supabase.');
+            console.log('[SMS Finance] Unique constraint violation (duplicate) prevented by Supabase.');
             success = true;
             return;
           }
@@ -467,26 +677,7 @@ export const FinanceProvider: React.FC<FinanceProviderProps> = ({ children }) =>
         }
 
         if (data) {
-          const d = new Date(data.date);
-          const newTx: Transaction = {
-            id: data.id,
-            amount: Number(data.amount),
-            category: data.category,
-            type: data.type as TransactionType,
-            date: data.date,
-            month: d.getMonth() + 1,
-            year: d.getFullYear(),
-            notes: data.notes || '',
-            memberId: data.member_id,
-            memberName: (data.profiles as any)?.name || 'Unknown',
-            proofUrl: null,
-            created_at: data.created_at,
-            source: 'sms',
-            bankName: data.bank_name,
-            merchantName: data.merchant_name,
-            smsConfidence: data.sms_confidence,
-            smsReference: data.sms_reference,
-          };
+          const newTx = mapDbToTransaction(data);
 
           setTransactions(prev => {
             if (prev.some(t => t.id === newTx.id || (newTx.smsReference && t.smsReference === newTx.smsReference))) {
@@ -503,7 +694,7 @@ export const FinanceProvider: React.FC<FinanceProviderProps> = ({ children }) =>
             transactionType: (parsedSms.transactionType === 'credit' || parsedSms.transactionType === 'income' || data.type === 'income') ? 'credit' : 'debit'
           });
 
-          console.log('[SMS Context] SMS Transaction added:', newTx.amount);
+          console.log('[SMS Finance] SMS Transaction added:', newTx.amount);
           success = true;
 
           // Perform lazy sync fetch to ensure everything aligns perfectly
@@ -512,7 +703,7 @@ export const FinanceProvider: React.FC<FinanceProviderProps> = ({ children }) =>
           }, 1500);
         }
       } catch (err: any) {
-        console.error(`[SMS Context] DB insert failed (attempt ${attempt}/${maxAttempts}):`, err);
+        console.error(`[SMS Finance] DB insert failed (attempt ${attempt}/${maxAttempts}):`, err);
         if (err && typeof err === 'object') {
           console.error(
             'Relationship Error',
@@ -539,7 +730,7 @@ export const FinanceProvider: React.FC<FinanceProviderProps> = ({ children }) =>
     });
 
     insertQueue = currentInsert.catch(err => {
-      console.error('[SMS Context] Queue processing failure:', err);
+      console.error('[SMS Finance] Queue processing failure:', err);
     });
 
     return currentInsert;
@@ -666,6 +857,7 @@ export const FinanceProvider: React.FC<FinanceProviderProps> = ({ children }) =>
 
       // Actions & Config
       addTransaction,
+      updateTransaction,
       addSmsTransaction,
       deleteTransaction,
       budgetLimit,

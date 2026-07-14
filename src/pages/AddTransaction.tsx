@@ -1,11 +1,14 @@
 import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import { compressForReceipts } from '../utils/imageCompressor';
 import { useFinance } from '../context/FinanceContext';
+import { useFamily } from '../context/FamilyContext';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { motion, AnimatePresence } from 'framer-motion';
+import { invalidateStorageCache, getUserStorageUsage } from '../utils/storageService';
+import { useSubscription, FREE_STORAGE_LIMIT_BYTES } from '../context/SubscriptionContext';
 import { Capacitor } from '@capacitor/core';
 import { suppressLockForFilePicker } from '../utils/appLockService';
 import { CapacitorPluginMlKitTextRecognition } from '@pantrist/capacitor-plugin-ml-kit-text-recognition';
@@ -135,6 +138,7 @@ export default function AddTransaction() {
   const { addTransaction, refetch } = useFinance();
   const { user } = useAuth();
   const { t } = useLanguage();
+  const { isPremium, features, setShowUpgradeModal } = useSubscription();
   const navigate = useNavigate();
   const location = useLocation();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -246,22 +250,26 @@ export default function AddTransaction() {
 
   const categories = useMemo(() => (type === 'expense' ? expenseCategories : incomeCategories), [type]);
 
-  // New state for selecting family members
+  // New state for selecting family members — FAMILY SCOPED (BUG 1 FIX)
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
   const [selectedMemberId, setSelectedMemberId] = useState('');
 
+  // BUG 1 FIX: Get family-scoped members from FamilyContext
+  const { members: familyContextMembers, family } = useFamily();
+
   useEffect(() => {
-    async function fetchProfiles() {
-      try {
-        const { data, error } = await supabase.from('profiles').select('id, name');
-        if (error) throw error;
-        if (data) setFamilyMembers(data as FamilyMember[]);
-      } catch (err) {
-        console.error('Error fetching family profiles:', err);
-      }
+    // BUG 1 FIX: Only show members from the CURRENT family, not all profiles
+    if (familyContextMembers.length > 0) {
+      const members: FamilyMember[] = familyContextMembers.map((m: any) => ({
+        id: m.user_id,
+        name: m.profile?.name || 'Member',
+      }));
+      setFamilyMembers(members);
+    } else if (user?.id) {
+      // Fallback: if no family context, show only current user
+      setFamilyMembers([{ id: user.id, name: user.name || 'Me' }]);
     }
-    fetchProfiles();
-  }, []);
+  }, [familyContextMembers, user]);
 
   // Set default member selection based on type
   useEffect(() => {
@@ -537,6 +545,22 @@ export default function AddTransaction() {
 
       if (proofImage) {
         try {
+          const usage = await getUserStorageUsage(user.id);
+          const limit = features?.max_storage_bytes || FREE_STORAGE_LIMIT_BYTES;
+          if (usage.usedBytes + proofImage.size > limit) {
+            setIsSubmitting(false);
+            if (!isPremium) {
+              setShowUpgradeModal(true);
+            } else {
+              alert(t('Premium storage limit reached (maximum 5 GB allowed).'));
+            }
+            return;
+          }
+        } catch (err) {
+          console.warn('Storage validation failed, proceeding:', err);
+        }
+
+        try {
           const fileExt = proofImage.name.split('.').pop();
           const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
           const filePath = `${user.id}/${fileName}`;
@@ -598,11 +622,16 @@ export default function AddTransaction() {
         });
       }
 
+      // Invalidate storage cache if receipt uploaded
+      if (proofImage && user?.id) {
+        invalidateStorageCache(user.id, family?.id);
+      }
+
       setIsSubmitting(false);
       setSubmitted(true);
       setTimeout(() => navigate('/'), 1200);
     },
-    [amount, category, date, notes, proofImage, type, user, addTransaction, navigate, validateForm, selectedMemberId, refetch]
+    [amount, category, date, notes, proofImage, type, user, addTransaction, navigate, validateForm, selectedMemberId, refetch, family]
   );
 
   // Focus ring class based on type

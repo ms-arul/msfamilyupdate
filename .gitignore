@@ -10,3 +10,5 @@ home-31f14-*.json
 google-services.json
 .codewhale
 .codewhale/
+*.aab
+*_orig.png

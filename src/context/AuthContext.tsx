@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { loadPreferences } from '../utils/preferencesService';
 import { applyTheme } from '../utils/themeService';
 import { updateMyLocationOnce } from '../utils/trackingService';
 import { updateSmsConfig } from '../utils/smsService';
 import { createSafeContext } from './contextHelper';
+import SplashScreen from '../components/SplashScreen';
+import { Capacitor } from '@capacitor/core';
+import { Browser } from '@capacitor/browser';
 
 export interface FamilyUser {
   id: string;
@@ -37,7 +40,27 @@ interface AuthProviderProps {
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<FamilyUser | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [showSplash, setShowSplash] = useState<boolean>(true);
+  const [animationDone, setAnimationDone] = useState<boolean>(false);
 
+  // Splash animation minimum display timer (2.8 seconds)
+  useEffect(() => {
+    if (showSplash) {
+      const timer = setTimeout(() => {
+        setAnimationDone(true);
+      }, 2800);
+      return () => clearTimeout(timer);
+    }
+  }, [showSplash]);
+
+  // Turn off splash ONLY after BOTH loading finishes AND animation timer has completed
+  useEffect(() => {
+    if (showSplash && animationDone && !loading) {
+      setShowSplash(false);
+    }
+  }, [showSplash, animationDone, loading]);
+
+  const shouldRenderSplash = showSplash && (!animationDone || loading);
   useEffect(() => {
     // Check active session on mount
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -57,6 +80,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     // Listen to auth state changes (login, logout, token refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      console.log('[AuthFlow] Auth State Changed. Event:', _event, 'User:', session?.user?.email);
       if (session?.user) {
         // Always update native config — covers login AND token refresh events
         updateSmsConfig(
@@ -71,16 +95,110 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           fetchProfile(session.user);
         }
       } else {
-        setUser(null);
-        setLoading(false);
-        updateSmsConfig('', '', '', '', '');
+        // Only clear user state on explicit sign-out, not on transient null
+        // sessions (e.g. during token refresh or WebView restart).
+        if (_event === 'SIGNED_OUT') {
+          setUser(null);
+          setLoading(false);
+          updateSmsConfig('', '', '', '', '');
+        }
       }
     });
 
-    return () => subscription.unsubscribe();
+    // Native Deep Link handling for Google OAuth redirects
+    let appUrlListener: Promise<any> | null = null;
+    if (Capacitor.isNativePlatform()) {
+      import('@capacitor/app').then(({ App }) => {
+        const handleDeepLinkUrl = async (url: string) => {
+          console.log('[AuthFlow] ═══════════════════════════════════════');
+          console.log('[AuthFlow] Deep Link Received');
+          console.log('[AuthFlow]   Full URL:', url);
+          console.log('[AuthFlow] ═══════════════════════════════════════');
+
+          if (url.startsWith('msfamily://callback') || url.includes('access_token=')) {
+            try {
+              // Normalize scheme for proper URL parsing
+              const parsedUrl = new URL(url.replace('msfamily://', 'http://'));
+              const hash = parsedUrl.hash.substring(1); // remove '#'
+              const hashParams = new URLSearchParams(hash);
+              
+              let accessToken = hashParams.get('access_token');
+              let refreshToken = hashParams.get('refresh_token');
+              
+              if (!accessToken || !refreshToken) {
+                const queryParams = parsedUrl.searchParams;
+                accessToken = accessToken || queryParams.get('access_token');
+                refreshToken = refreshToken || queryParams.get('refresh_token');
+              }
+
+              console.log('[AuthFlow]   access_token found:', !!accessToken);
+              console.log('[AuthFlow]   refresh_token found:', !!refreshToken);
+              
+              if (accessToken && refreshToken) {
+                console.log('[AuthFlow] Setting Supabase session...');
+                setLoading(true);
+                const { data, error } = await supabase.auth.setSession({
+                  access_token: accessToken,
+                  refresh_token: refreshToken,
+                });
+                
+                if (error) {
+                  console.error('[AuthFlow] ❌ Failed to set session from deep link:', error);
+                  setLoading(false);
+                } else if (data.session) {
+                  console.log('[AuthFlow] ✅ Session Created. User:', data.session.user.email);
+                  // Now that session is established, close the browser
+                  try {
+                    await Browser.close();
+                    console.log('[AuthFlow] ✅ Browser Closed');
+                  } catch (closeErr) {
+                    console.warn('[AuthFlow] Browser.close() error (non-fatal):', closeErr);
+                  }
+                  // fetchProfile is handled by onAuthStateChange SIGNED_IN event
+                }
+              } else {
+                console.warn('[AuthFlow] ⚠️ Deep link did not contain required tokens');
+                console.warn('[AuthFlow]   URL hash:', parsedUrl.hash);
+                console.warn('[AuthFlow]   URL search:', parsedUrl.search);
+              }
+            } catch (err) {
+              console.error('[AuthFlow] ❌ Error parsing deep link URL:', err);
+            }
+          } else {
+            console.log('[AuthFlow]   URL does not match OAuth callback pattern, ignoring');
+          }
+        };
+
+        // Handle case where app was launched via deep link (cold start)
+        App.getLastUrl().then((lastUrl) => {
+          if (lastUrl && lastUrl.url) {
+            console.log('[AuthFlow] Cold start deep link detected:', lastUrl.url);
+            handleDeepLinkUrl(lastUrl.url);
+          }
+        });
+
+        // Listen for deep links when app is already running (warm start)
+        appUrlListener = Promise.resolve(
+          App.addListener('appUrlOpen', (event) => {
+            console.log('[AuthFlow] Warm start appUrlOpen fired:', event.url);
+            handleDeepLinkUrl(event.url);
+          })
+        );
+      }).catch(err => {
+        console.error('[AuthFlow] Failed to load Capacitor App plugin:', err);
+      });
+    }
+
+    return () => {
+      subscription.unsubscribe();
+      if (appUrlListener) {
+        appUrlListener.then((l: any) => l.remove());
+      }
+    };
   }, []);
 
   const fetchProfile = async (authUser: any) => {
+    console.log('[AuthContext] fetchProfile started for authUser:', authUser.id, authUser.email);
     setLoading(true);
     try {
       const { data, error } = await supabase
@@ -89,11 +207,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         .eq('id', authUser.id)
         .single();
 
+      console.log('[AuthContext] fetchProfile query result:', { data, error });
+
       if (error && error.code !== 'PGRST116') {
         console.error('Profile fetch error:', error);
       }
 
       if (data) {
+        console.log('[AuthContext] Profile found in DB, setting user state');
         setUser({
           id: authUser.id,
           email: authUser.email,
@@ -107,6 +228,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         // Load and apply user preferences from backend
         try {
           const prefs = await loadPreferences(authUser.id);
+          console.log('[AuthContext] Loaded preferences:', prefs);
           if (prefs) {
             // Apply theme
             applyTheme(prefs.theme || 'light');
@@ -119,20 +241,43 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           console.warn('Failed to load preferences:', prefErr);
         }
       } else {
-        // Profile not created yet (shouldn't happen with trigger, fallback)
+        console.log('[AuthContext] Profile NOT found in DB. Creating fallback profile');
         const namePart = authUser.email ? authUser.email.split('@')[0] : 'Guest';
+        const newProfile = {
+          id: authUser.id,
+          name: authUser.user_metadata?.full_name || authUser.user_metadata?.name || namePart,
+          avatar: authUser.user_metadata?.avatar_url || `https://ui-avatars.com/api/?name=${namePart}&background=7c3aed&color=fff`,
+          role: 'Member'
+        };
+
+        try {
+          const { error: insertError } = await supabase
+            .from('profiles')
+            .insert([newProfile]);
+
+          if (insertError) {
+            console.error('[AuthContext] Failed to create profile on demand:', insertError);
+          } else {
+            console.log('[AuthContext] Successfully created profile on demand in DB');
+          }
+        } catch (dbErr) {
+          console.error('[AuthContext] Unexpected error creating profile row:', dbErr);
+        }
+
+        console.log('[AuthContext] Setting user state with fallback profile');
         setUser({
           id: authUser.id,
           email: authUser.email,
-          name: namePart,
-          role: 'Member',
-          avatar: `https://ui-avatars.com/api/?name=${namePart}&background=7c3aed&color=fff`,
+          name: newProfile.name,
+          role: newProfile.role,
+          avatar: newProfile.avatar,
         });
       }
     } catch (err) {
-      console.error('Unexpected error fetching profile:', err);
+      console.error('[AuthContext] Unexpected error fetching profile:', err);
     } finally {
       setLoading(false);
+      console.log('[AuthContext] fetchProfile finished, loading set to false');
     }
   };
 
@@ -213,49 +358,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   return (
     <AuthContextProvider value={{ user, login, signUp, logout, loading, updateUsername }}>
-      {loading ? (
-        <div className="absolute inset-0 z-50 bg-white dark:bg-[#0a0a14] flex flex-col items-center justify-center overflow-hidden transition-colors">
-          {/* Apple-style splash screen */}
-          <div className="flex flex-col items-center justify-center gap-8">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-            >
-              <motion.div
-                animate={{ scale: [1, 1.04, 1] }}
-                transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-                className="w-20 h-20 rounded-[22px] overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.08)]"
-              >
-                <img
-                  src="/mslogoinapp.png"
-                  alt="MS Family"
-                  className="w-full h-full object-contain scale-90"
-                  loading="eager"
-                />
-              </motion.div>
-            </motion.div>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.4, duration: 0.5 }}
-              className="w-[180px] h-[3px] bg-slate-200/80 rounded-full overflow-hidden"
-            >
-              <motion.div
-                initial={{ x: "-100%" }}
-                animate={{ x: "100%" }}
-                transition={{
-                  duration: 1.2,
-                  repeat: Infinity,
-                  ease: "easeInOut",
-                }}
-                className="w-1/2 h-full bg-slate-400 rounded-full"
-              />
-            </motion.div>
-          </div>
-        </div>
-      ) : null}
-      <div style={{ display: loading ? 'none' : 'block', width: '100%', height: '100%' }}>
+      <AnimatePresence mode="wait">
+        {shouldRenderSplash && <SplashScreen />}
+      </AnimatePresence>
+      <div style={{ display: shouldRenderSplash ? 'none' : 'block', width: '100%', height: '100%' }}>
         {children}
       </div>
     </AuthContextProvider>

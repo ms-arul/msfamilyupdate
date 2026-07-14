@@ -4,15 +4,17 @@ import {
   Moon, Sun, Monitor, Globe, User, Shield, Bell,
   Database, LogOut, Smartphone, Trash2, Download, RefreshCw,
   Volume2, VolumeX, Clock, Info, X, Pencil, Save, CheckCircle2,
-  Cloud, CloudOff, Loader2, Fingerprint, Lock, ExternalLink,
-  MessageSquare, Zap, Check, AlertCircle, Camera, Users, ChevronRight
+  Cloud, CloudOff, Loader2, Fingerprint, Lock, ExternalLink, Key,
+  MessageSquare, Zap, Check, AlertCircle, Camera, Users, ChevronRight,
+  FileText, BookOpen, CreditCard, Code, HelpCircle, Tag, History
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useFamily } from '../context/FamilyContext';
 import Cropper, { Area } from 'react-easy-crop';
 import getCroppedImg from '../utils/cropImage';
 import { compressForAvatar } from '../utils/imageCompressor';
-import { useLanguage, LANGUAGES } from '../context/LanguageContext';
+import { useLanguage } from '../context/LanguageContext';
+import { LANGUAGE_LIST } from '../utils/translationDictionaries';
 import { THEME_MODES, getStoredTheme, applyTheme } from '../utils/themeService';
 import { saveSinglePreference, savePreferences, UserPreferences } from '../utils/preferencesService';
 import { downloadBase64File } from '../utils/downloadHelper';
@@ -30,7 +32,7 @@ import {
   openSecuritySettings,
   SecurityCapabilities
 } from '../utils/appLockService';
-import { hashPin, encryptPassword } from '../utils/cryptoHelper';
+
 
 // ─── Spring configs ──────────────────────────────────────
 const SPRING_SOFT = { type: 'spring', stiffness: 380, damping: 30 } as const;
@@ -80,6 +82,81 @@ const SectionHeader: React.FC<SectionHeaderProps> = ({ title }) => (
     </span>
   </div>
 );
+
+// ─── Password Strength Meter ─────────────────────────────
+interface PasswordStrengthMeterProps {
+  password?: string;
+  t: (key: string) => string;
+}
+
+const PasswordStrengthMeter: React.FC<PasswordStrengthMeterProps> = ({ password, t }) => {
+  const isDark = document.documentElement.classList.contains('dark');
+  const strength = React.useMemo(() => {
+    if (!password) return 0;
+    let score = 0;
+    if (password.length >= 8) score++;
+    if (/[A-Z]/.test(password)) score++;
+    if (/[0-9]/.test(password)) score++;
+    if (/[^A-Za-z0-9]/.test(password)) score++;
+    if (password.length < 6) return 1;
+    if (score <= 1) return 1;
+    if (score === 2) return 2;
+    return 3;
+  }, [password]);
+
+  const getStrengthText = () => {
+    switch (strength) {
+      case 1: return t('Weak');
+      case 2: return t('Medium');
+      case 3: return t('Strong');
+      default: return '';
+    }
+  };
+
+  const getStrengthColor = () => {
+    switch (strength) {
+      case 1: return 'linear-gradient(90deg, #ff5f56, #ff8a65)';
+      case 2: return 'linear-gradient(90deg, #ffb020, #ffd060)';
+      case 3: return 'linear-gradient(90deg, #30d158, #64e08a)';
+      default: return 'transparent';
+    }
+  };
+
+  if (!password) return null;
+
+  return (
+    <div className="mt-2 overflow-hidden">
+      <div className="flex gap-1 h-[3px]">
+        {[0, 1, 2].map((i) => (
+          <div
+            key={i}
+            className="flex-1 rounded-full overflow-hidden"
+            style={{ background: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(120,120,140,0.18)' }}
+          >
+            <motion.div
+              className="h-full rounded-full"
+              initial={{ width: 0 }}
+              animate={{ width: strength > i ? '100%' : '0%' }}
+              transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1], delay: i * 0.04 }}
+              style={{ background: getStrengthColor() }}
+            />
+          </div>
+        ))}
+      </div>
+      <p className="text-[10.5px] mt-1.5 tracking-wide text-slate-500 dark:text-slate-400">
+        {t('Password strength:')}{' '}
+        <span className="font-semibold text-slate-600 dark:text-slate-300">
+          {getStrengthText()}
+        </span>
+      </p>
+      {strength === 1 && (
+        <p className="text-[10.5px] mt-0.5 text-red-500 dark:text-red-400">
+          {t('Use 8+ chars with uppercase, number & symbol')}
+        </p>
+      )}
+    </div>
+  );
+};
 
 // ─── Glass Card ──────────────────────────────────────────
 interface SettingCardProps {
@@ -268,13 +345,7 @@ export default function Settings() {
 
   const [smsEnabled, setSmsEnabled] = useState(isSmsReaderEnabled());
 
-  const [hasPasskeyPin, setHasPasskeyPin] = useState(false);
-  const [showPasskeyModal, setShowPasskeyModal] = useState(false);
-  const [passkeyVerifyPassword, setPasskeyVerifyPassword] = useState('');
-  const [passkeyPin, setPasskeyPin] = useState('');
-  const [passkeyConfirmPin, setPasskeyConfirmPin] = useState('');
-  const [passkeyError, setPasskeyError] = useState('');
-  const [passkeyLoading, setPasskeyLoading] = useState(false);
+
 
   const [toast, setToast] = useState<{
     message: string;
@@ -297,23 +368,66 @@ export default function Settings() {
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
   const [isCropping, setIsCropping] = useState<boolean>(false);
 
-  useEffect(() => {
-    if (!user?.id) return;
-    supabase
-      .from('user_preferences')
-      .select('passkey_pin_hash')
-      .eq('user_id', user.id)
-      .single()
-      .then(({ data }) => {
-        if (data?.passkey_pin_hash) {
-          setHasPasskeyPin(true);
-        } else {
-          setHasPasskeyPin(false);
-          localStorage.removeItem('msfamily_passkey_pin_enabled');
-          localStorage.removeItem('msfamily_encrypted_password');
-        }
+  // Change password states
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false);
+  const [changePasswordLoading, setChangePasswordLoading] = useState(false);
+  const [changePasswordError, setChangePasswordError] = useState('');
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentPassword) {
+      setChangePasswordError(t('Current password is required'));
+      return;
+    }
+    if (!newPassword) {
+      setChangePasswordError(t('New password is required'));
+      return;
+    }
+    if (newPassword.length < 6) {
+      setChangePasswordError(t('Password must be at least 6 characters'));
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      setChangePasswordError(t('Passwords do not match'));
+      return;
+    }
+    if (newPassword === currentPassword) {
+      setChangePasswordError(t('New password must be different from current password'));
+      return;
+    }
+
+    setChangePasswordLoading(true);
+    setChangePasswordError('');
+
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword,
+        current_password: currentPassword,
       });
-  }, [user?.id]);
+
+      if (error) {
+        throw error;
+      }
+
+      showToast(t('Password updated successfully'), CheckCircle2);
+      setShowChangePasswordModal(false);
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmNewPassword('');
+    } catch (err: any) {
+      setChangePasswordError(err.message || t('Failed to update password. Please check your credentials.'));
+    } finally {
+      setChangePasswordLoading(false);
+    }
+  };
+
+
 
   const showToast = useCallback((
     msg: string, 
@@ -371,9 +485,12 @@ export default function Settings() {
     syncToBackend('theme', newTheme, t('Theme updated'));
   };
 
-  const handleLanguageChange = (newLang: typeof LANGUAGES[keyof typeof LANGUAGES]) => {
+  const handleLanguageChange = (newLang: string) => {
     setLanguage(newLang);
-    const label = newLang === LANGUAGES.EN ? 'Language set to English' : 'மொழி தமிழாக மாற்றப்பட்டது';
+    const selectedLang = LANGUAGE_LIST.find(l => l.code === newLang);
+    const label = selectedLang 
+      ? `Language set to ${selectedLang.name}` 
+      : `Language set to ${newLang}`;
     syncToBackend('language', newLang, label);
   };
 
@@ -503,61 +620,7 @@ export default function Settings() {
     setSecurityBusy(false);
   }, [biometricOn, appLockOn, securityBusy, showToast, t]);
 
-  const handleRemovePasskeyPin = useCallback(async () => {
-    if (!user?.id) return;
-    setSecurityBusy(true);
-    try {
-      const { error } = await supabase.from('user_preferences')
-        .update({ passkey_pin_hash: null, encrypted_password: null })
-        .eq('user_id', user.id);
-      if (!error) {
-        localStorage.removeItem('msfamily_passkey_pin_enabled');
-        localStorage.removeItem('msfamily_encrypted_password');
-        setHasPasskeyPin(false);
-        showToast(t('Passkey PIN removed successfully'));
-      } else { showToast(t('Failed to remove Passkey PIN')); }
-    } catch { showToast(t('Failed to remove Passkey PIN')); }
-    finally { setSecurityBusy(false); }
-  }, [user?.id, showToast, t]);
 
-  const handleConfigurePasskeyPin = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user?.id || !user?.email) return;
-    if (passkeyPin.length !== 4 || !/^\d+$/.test(passkeyPin)) {
-      setPasskeyError(t('PIN must be exactly 4 digits')); return;
-    }
-    if (passkeyPin !== passkeyConfirmPin) {
-      setPasskeyError(t('PINs do not match')); return;
-    }
-    setPasskeyLoading(true);
-    setPasskeyError('');
-    try {
-      const { error: authError } = await supabase.auth.signInWithPassword({
-        email: user.email, password: passkeyVerifyPassword,
-      });
-      if (authError) { setPasskeyError(t('Incorrect main password')); setPasskeyLoading(false); return; }
-
-      const hashedPin = await hashPin(passkeyPin);
-      const encrypted = encryptPassword(passkeyVerifyPassword, passkeyPin);
-      const { error: dbError } = await supabase.from('user_preferences')
-        .update({ passkey_pin_hash: hashedPin, encrypted_password: encrypted })
-        .eq('user_id', user.id);
-      if (dbError) { setPasskeyError(t('Failed to save to database')); setPasskeyLoading(false); return; }
-
-      localStorage.setItem('msfamily_passkey_pin_enabled', 'true');
-      localStorage.setItem('msfamily_encrypted_password', encrypted);
-      localStorage.setItem('rememberedEmail', user.email);
-      localStorage.setItem('msfamily_user_name', user.name || '');
-      localStorage.setItem('msfamily_user_avatar', user.avatar || '');
-
-      setHasPasskeyPin(true);
-      setShowPasskeyModal(false);
-      setPasskeyPin(''); setPasskeyConfirmPin(''); setPasskeyVerifyPassword('');
-      showToast(t('Passkey PIN configured successfully'), Check);
-    } catch (err: any) {
-      setPasskeyError(err.message || t('An error occurred'));
-    } finally { setPasskeyLoading(false); }
-  }, [user, passkeyPin, passkeyConfirmPin, passkeyVerifyPassword, showToast, t]);
 
   const handleClearCache = () => {
     localStorage.removeItem('msfamily_translations_cache');
@@ -573,7 +636,7 @@ export default function Settings() {
     localStorage.removeItem('msfamily_translations_cache');
     applyTheme(THEME_MODES.LIGHT);
     setTheme(THEME_MODES.LIGHT);
-    setLanguage(LANGUAGES.EN);
+    setLanguage('en');
     setNotifEnabled(true);
     setNotifSound(true);
     setReminderFreq('daily');
@@ -844,55 +907,26 @@ export default function Settings() {
             </SettingCard>
           </motion.section>
 
-          {/* ════ LANGUAGE ════ */}
+          {/* ════ LANGUAGE & REGION ════ */}
           <motion.section variants={item}>
-            <SectionHeader title={t('Language')} />
+            <SectionHeader title={t('Language & Region')} />
             <SettingCard>
-              <div className="grid grid-cols-2">
-                {[{ id: LANGUAGES.EN, label: 'English' }, { id: LANGUAGES.TA, label: 'தமிழ்' }].map((lang, i) => (
-                  <motion.button
-                    key={lang.id}
-                    onClick={() => handleLanguageChange(lang.id)}
-                    whileTap={{ scale: 0.97 }}
-                    transition={SPRING_SNAPPY}
-                    className={`relative flex flex-col items-center justify-center py-4 ${i === 0 ? 'border-r border-black/[0.06] dark:border-white/[0.06]' : ''} transition-colors ${language === lang.id
-                        ? 'bg-primary-500/[0.08] dark:bg-primary-500/[0.12]'
-                        : 'hover:bg-black/[0.02] dark:hover:bg-white/[0.02]'
-                      }`}
-                  >
-                    {language === lang.id && (
-                      <motion.div
-                        layoutId="lang-check"
-                        className="absolute top-2.5 right-3 w-5 h-5 rounded-full bg-primary-500 flex items-center justify-center"
-                        transition={SPRING_SOFT}
-                      >
-                        <Check size={11} color="white" strokeWidth={3} />
-                      </motion.div>
-                    )}
-                    <span className={`text-[14px] font-semibold ${language === lang.id ? 'text-primary-600 dark:text-primary-400' : 'text-slate-700 dark:text-slate-300'}`}>
-                      {lang.label}
-                    </span>
-                  </motion.button>
-                ))}
-              </div>
-              <AnimatePresence>
-                {language === LANGUAGES.TA && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    transition={SPRING_GENTLE}
-                    className="overflow-hidden"
-                  >
-                    <div className="flex items-center justify-center gap-1.5 px-4 py-2.5 bg-amber-50/80 dark:bg-amber-500/10 border-t border-amber-100 dark:border-amber-500/20">
-                      <Info size={11} className="text-amber-600 dark:text-amber-400 shrink-0" />
-                      <span className="text-[11px] text-amber-700 dark:text-amber-400">
-                        {t('Translated successfully and cached locally')}
-                      </span>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+              <SettingRow
+                icon={Globe}
+                iconBg="rgba(52, 199, 89, 0.12)"
+                iconColor="#34C759"
+                title={t('Language')}
+                subtitle={LANGUAGE_LIST.find(l => l.code === language)?.nativeName || 'English'}
+                onPress={() => navigate('/settings/language')}
+                last
+              >
+                <div className="flex items-center gap-1">
+                  <span className="text-[13px] text-slate-400 dark:text-slate-500">
+                    {LANGUAGE_LIST.find(l => l.code === language)?.nativeName || 'English'}
+                  </span>
+                  <ChevronRight size={15} className="text-slate-400 dark:text-slate-600" />
+                </div>
+              </SettingRow>
             </SettingCard>
           </motion.section>
 
@@ -945,106 +979,101 @@ export default function Settings() {
           <motion.section variants={item}>
             <SectionHeader title={t('Security')} />
             <SettingCard>
-              <SettingRow
-                icon={Lock}
-                iconBg="rgba(88,86,214,0.12)"
-                iconColor="#5856D6"
-                title={t('Passkey PIN')}
-                subtitle={hasPasskeyPin ? t('4-digit PIN login enabled') : t('Quick access not set up')}
-                last={!securityLoading && !securityCaps?.isNative}
-              >
-                <div className="flex items-center gap-2">
-                  {hasPasskeyPin && (
-                    <motion.button
-                      whileTap={{ scale: 0.93 }}
-                      onClick={handleRemovePasskeyPin}
-                      className="px-3 py-1.5 text-[12px] font-semibold bg-red-50 dark:bg-red-500/10 text-[#FF3B30] rounded-[9px] hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors"
-                    >
-                      {t('Remove')}
-                    </motion.button>
-                  )}
-                  <motion.button
-                    whileTap={{ scale: 0.93 }}
-                    onClick={() => setShowPasskeyModal(true)}
-                    className="px-3 py-1.5 text-[12px] font-semibold bg-primary-50 dark:bg-primary-500/[0.12] text-primary-600 dark:text-primary-400 rounded-[9px] hover:bg-primary-100 dark:hover:bg-primary-500/20 transition-colors"
-                  >
-                    {hasPasskeyPin ? t('Change') : t('Set Up')}
-                  </motion.button>
-                </div>
-              </SettingRow>
-
               {securityLoading ? (
-                <div className="flex items-center justify-center gap-2.5 py-5 border-t border-black/[0.06] dark:border-white/[0.06]">
+                <div className="flex items-center justify-center gap-2.5 py-5">
                   <Loader2 size={17} className="animate-spin text-primary-500" />
                   <span className="text-[13px] text-slate-500 dark:text-slate-400">{t('Checking device security...')}</span>
                 </div>
-              ) : securityCaps && !securityCaps.isNative ? (
-                <div className="px-4 py-3 border-t border-black/[0.06] dark:border-white/[0.06] flex items-center gap-2 bg-black/[0.015] dark:bg-white/[0.015]">
-                  <Info size={12} className="text-slate-400 shrink-0" />
-                  <span className="text-[11px] text-slate-400 dark:text-slate-500">
-                    {t('Native features like Biometric Auth are available on the Android app only.')}
-                  </span>
-                </div>
-              ) : securityCaps && !securityCaps.hasDeviceLock ? (
-                <div className="p-5 text-center border-t border-black/[0.06] dark:border-white/[0.06]">
-                  <motion.div
-                    initial={{ scale: 0.8, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    transition={{ ...SPRING_SOFT, delay: 0.1 }}
-                    className="w-12 h-12 rounded-[14px] bg-amber-50 dark:bg-amber-500/10 flex items-center justify-center mx-auto mb-3"
-                  >
-                    <Lock size={20} className="text-amber-500" />
-                  </motion.div>
-                  <p className="text-[14px] font-semibold text-slate-700 dark:text-slate-300">{t('Device lock not configured')}</p>
-                  <p className="text-[12px] text-slate-400 mt-0.5">{t('Set up PIN, pattern, or password in device settings')}</p>
-                  <motion.button
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => openSecuritySettings()}
-                    className="mt-3 px-4 py-2 text-[12px] font-semibold bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-[10px] inline-flex items-center gap-1.5 hover:bg-amber-100 dark:hover:bg-amber-500/20 transition-colors"
-                  >
-                    <ExternalLink size={12} /> {t('Open Settings')}
-                  </motion.button>
-                </div>
               ) : (
                 <>
-                  <SettingRow
-                    icon={Lock}
-                    iconBg="rgba(52,199,89,0.12)"
-                    iconColor="#34C759"
-                    title={t('App Lock')}
-                    subtitle={t('Require PIN to open app')}
-                  >
-                    <ToggleSwitch enabled={appLockOn} onToggle={handleToggleAppLock} disabled={securityBusy} />
-                  </SettingRow>
-                  <SettingRow
-                    icon={Fingerprint}
-                    iconBg={securityCaps?.hasBiometric ? 'rgba(255,59,48,0.12)' : 'rgba(142,142,147,0.1)'}
-                    iconColor={securityCaps?.hasBiometric ? '#FF3B30' : '#8e8e93'}
-                    title={t('Biometric Unlock')}
-                    subtitle={
-                      !securityCaps?.biometricHardwarePresent ? t('Not supported on this device')
-                        : securityCaps?.biometricNotEnrolled ? t('No biometric enrolled')
-                          : securityCaps?.biometricType === 'fingerprint' ? t('Use fingerprint to unlock')
-                            : securityCaps?.biometricType === 'face' ? t('Use face unlock')
-                              : t('Use fingerprint or Face ID')
-                    }
-                    last
-                  >
-                    {securityCaps?.biometricNotEnrolled ? (
-                      <motion.button
-                        whileTap={{ scale: 0.93 }}
-                        onClick={() => openSecuritySettings()}
-                        className="px-3 py-1.5 text-[12px] font-semibold bg-red-50 dark:bg-red-500/10 text-[#FF3B30] rounded-[9px] inline-flex items-center gap-1"
+                  {/* Native Device Security Features Banner / Notice */}
+                  {securityCaps && !securityCaps.isNative && (
+                    <div className="px-4 py-3 flex items-center gap-2 bg-black/[0.015] dark:bg-white/[0.015] border-b border-black/[0.06] dark:border-white/[0.06]">
+                      <Info size={12} className="text-slate-400 shrink-0" />
+                      <span className="text-[11px] text-slate-400 dark:text-slate-500">
+                        {t('Native features like Biometric Auth are available on the Android app only.')}
+                      </span>
+                    </div>
+                  )}
+
+                  {securityCaps && securityCaps.isNative && !securityCaps.hasDeviceLock ? (
+                    <div className="p-5 text-center border-b border-black/[0.06] dark:border-white/[0.06]">
+                      <motion.div
+                        initial={{ scale: 0.8, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        transition={{ ...SPRING_SOFT, delay: 0.1 }}
+                        className="w-12 h-12 rounded-[14px] bg-amber-50 dark:bg-amber-500/10 flex items-center justify-center mx-auto mb-3"
                       >
-                        <ExternalLink size={11} /> {t('Enroll')}
+                        <Lock size={20} className="text-amber-500" />
+                      </motion.div>
+                      <p className="text-[14px] font-semibold text-slate-700 dark:text-slate-300">{t('Device lock not configured')}</p>
+                      <p className="text-[12px] text-slate-400 mt-0.5">{t('Set up PIN, pattern, or password in device settings')}</p>
+                      <motion.button
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => openSecuritySettings()}
+                        className="mt-3 px-4 py-2 text-[12px] font-semibold bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-[10px] inline-flex items-center gap-1.5 hover:bg-amber-100 dark:hover:bg-amber-500/20 transition-colors"
+                      >
+                        <ExternalLink size={12} /> {t('Open Settings')}
                       </motion.button>
-                    ) : (
-                      <ToggleSwitch
-                        enabled={biometricOn}
-                        onToggle={handleToggleBiometric}
-                        disabled={securityBusy || !appLockOn || !securityCaps?.hasBiometric}
-                      />
-                    )}
+                    </div>
+                  ) : securityCaps && securityCaps.isNative ? (
+                    <>
+                      <SettingRow
+                        icon={Lock}
+                        iconBg="rgba(52,199,89,0.12)"
+                        iconColor="#34C759"
+                        title={t('App Lock')}
+                        subtitle={t('Require PIN to open app')}
+                        last={false}
+                      >
+                        <ToggleSwitch enabled={appLockOn} onToggle={handleToggleAppLock} disabled={securityBusy} />
+                      </SettingRow>
+                      {securityCaps?.hasBiometric && (
+                        <SettingRow
+                          icon={Fingerprint}
+                          iconBg={securityCaps?.hasBiometric ? 'rgba(255,59,48,0.12)' : 'rgba(142,142,147,0.1)'}
+                          iconColor={securityCaps?.hasBiometric ? '#FF3B30' : '#8e8e93'}
+                          title={t('Biometric Unlock')}
+                          subtitle={
+                            !securityCaps?.biometricHardwarePresent ? t('Not supported on this device')
+                              : securityCaps?.biometricNotEnrolled ? t('No biometric enrolled')
+                                : securityCaps?.biometricType === 'fingerprint' ? t('Use fingerprint to unlock')
+                                  : securityCaps?.biometricType === 'face' ? t('Use face unlock')
+                                    : t('Use fingerprint or Face ID')
+                          }
+                          last={false}
+                        >
+                          {securityCaps?.biometricNotEnrolled ? (
+                            <motion.button
+                              whileTap={{ scale: 0.93 }}
+                              onClick={() => openSecuritySettings()}
+                              className="px-3 py-1.5 text-[12px] font-semibold bg-red-50 dark:bg-red-500/10 text-[#FF3B30] rounded-[9px] inline-flex items-center gap-1"
+                            >
+                              <ExternalLink size={11} /> {t('Enroll')}
+                            </motion.button>
+                          ) : (
+                            <ToggleSwitch
+                              enabled={biometricOn}
+                              onToggle={handleToggleBiometric}
+                              disabled={securityBusy || !appLockOn || !securityCaps?.hasBiometric}
+                            />
+                          )}
+                        </SettingRow>
+                      )}
+                    </>
+                  ) : null}
+
+                  {/* Always Visible: Change Password */}
+                  <SettingRow
+                    icon={Key}
+                    iconBg="rgba(255,149,0,0.12)"
+                    iconColor="#FF9500"
+                    title={t('Change Password')}
+                    subtitle={t('Update your account password')}
+                    onPress={() => setShowChangePasswordModal(true)}
+                    last={true}
+                  >
+                    <ChevronRight size={15} className="text-slate-400 dark:text-slate-600" />
                   </SettingRow>
                 </>
               )}
@@ -1144,6 +1173,24 @@ export default function Settings() {
             </SettingCard>
           </motion.section>
 
+          {/* ════ STORAGE ════ */}
+          <motion.section variants={item}>
+            <SectionHeader title={t('Storage')} />
+            <SettingCard>
+              <SettingRow
+                icon={Database}
+                iconBg="rgba(9,185,252,0.12)"
+                iconColor="#09b9fc"
+                title={t('Manage Storage')}
+                subtitle={t('View space usage, preview receipts & documents, and free up space')}
+                last
+                onPress={() => navigate('manage-storage')}
+              >
+                <ChevronRight size={15} className="text-slate-400 dark:text-slate-600" />
+              </SettingRow>
+            </SettingCard>
+          </motion.section>
+
           {/* ════ DATA MANAGEMENT ════ */}
           <motion.section variants={item}>
             <SectionHeader title={t('Data Management')} />
@@ -1197,6 +1244,24 @@ export default function Settings() {
             </SettingCard>
           </motion.section>
 
+          {/* ════ APP INFORMATION ════ */}
+          <motion.section variants={item}>
+            <SectionHeader title={t('App Information')} />
+            <SettingCard>
+              <SettingRow
+                icon={Info}
+                iconBg="rgba(9,185,252,0.12)"
+                iconColor="#09b9fc"
+                title={t('App Information')}
+                subtitle={t('About, legal details, terms, privacy, and policies')}
+                last
+                onPress={() => navigate('app-info')}
+              >
+                <ChevronRight size={15} className="text-slate-400 dark:text-slate-600" />
+              </SettingRow>
+            </SettingCard>
+          </motion.section>
+
           {/* ════ SIGN OUT ════ */}
           <motion.section variants={item}>
             <SettingCard>
@@ -1214,181 +1279,10 @@ export default function Settings() {
             </SettingCard>
           </motion.section>
 
-          {/* Bottom spacer */}
-          <div className="h-4" />
         </motion.div>
       </div>
 
-      {/* ════ PASSKEY MODAL ════ */}
-      <AnimatePresence>
-        {showPasskeyModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-[150] flex items-end sm:items-center justify-center p-4"
-            style={{ background: 'rgba(0,0,0,0.55)' }}
-            onClick={(e) => { if (e.target === e.currentTarget) { setShowPasskeyModal(false); setPasskeyPin(''); setPasskeyConfirmPin(''); setPasskeyVerifyPassword(''); setPasskeyError(''); } }}
-          >
-            {/* Backdrop blur layer */}
-            <div className="absolute inset-0 backdrop-blur-[20px]" />
 
-            <motion.div
-              initial={{ opacity: 0, y: 40, scale: 0.96 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 30, scale: 0.96 }}
-              transition={SPRING_SOFT}
-              className="relative w-full max-w-[340px] rounded-[28px] overflow-hidden shadow-[0_30px_80px_rgba(0,0,0,0.4)]"
-              style={{ background: 'rgba(255,255,255,0.92)', backdropFilter: 'blur(40px) saturate(180%)' }}
-            >
-              <div className="dark:hidden" />
-              {/* Dark mode overlay */}
-              <div
-                className="hidden dark:block absolute inset-0 rounded-[28px]"
-                style={{ background: 'rgba(28,28,30,0.95)', backdropFilter: 'blur(40px)' }}
-              />
-
-              <div className="relative p-6">
-                {/* Close */}
-                <motion.button
-                  whileTap={{ scale: 0.88 }}
-                  onClick={() => { setShowPasskeyModal(false); setPasskeyPin(''); setPasskeyConfirmPin(''); setPasskeyVerifyPassword(''); setPasskeyError(''); }}
-                  className="absolute right-4 top-4 w-7 h-7 rounded-full bg-black/[0.06] dark:bg-white/[0.08] flex items-center justify-center text-slate-500 dark:text-slate-400 hover:bg-black/[0.1] dark:hover:bg-white/[0.12] transition-colors"
-                >
-                  <X size={14} />
-                </motion.button>
-
-                {/* Header */}
-                <div className="flex items-center gap-3 mb-5">
-                  <div
-                    className="w-[42px] h-[42px] rounded-[13px] flex items-center justify-center shadow-md"
-                    style={{ background: 'linear-gradient(135deg, #5856D6 0%, #007AFF 100%)', boxShadow: '0 6px 18px rgba(88,86,214,0.3)' }}
-                  >
-                    <Lock size={18} color="white" />
-                  </div>
-                  <div>
-                    <h3 className="text-[16px] font-bold text-slate-900 dark:text-white">
-                      {hasPasskeyPin ? t('Change Passkey PIN') : t('Set Up Passkey PIN')}
-                    </h3>
-                    <p className="text-[12px] text-slate-500 dark:text-slate-400">
-                      {t('Authenticate quickly on this device')}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Error */}
-                <AnimatePresence>
-                  {passkeyError && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={SPRING_GENTLE}
-                      className="overflow-hidden mb-4"
-                    >
-                      <div className="p-3 rounded-[12px] bg-red-50 dark:bg-red-500/10 border border-red-100 dark:border-red-500/20 flex items-center gap-2">
-                        <AlertCircle size={13} className="text-[#FF3B30] shrink-0" />
-                        <span className="text-[12px] text-[#FF3B30]">{passkeyError}</span>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-
-                <form onSubmit={handleConfigurePasskeyPin} className="space-y-4">
-                  {/* Main password */}
-                  <div>
-                    <label className="text-[10px] font-bold uppercase tracking-[0.1em] text-slate-400 dark:text-slate-500 block mb-1.5">
-                      {t('Verify Main Password')}
-                    </label>
-                    <input
-                      type="password"
-                      required
-                      value={passkeyVerifyPassword}
-                      onChange={(e) => setPasskeyVerifyPassword(e.target.value)}
-                      placeholder={t('Enter your login password')}
-                      className="w-full px-3.5 py-2.5 text-[14px] rounded-[12px] border border-black/[0.1] dark:border-white/[0.1] bg-black/[0.03] dark:bg-white/[0.05] text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-primary-500/30 transition-all"
-                    />
-                  </div>
-
-                  {/* PIN fields */}
-                  <div className="grid grid-cols-2 gap-3">
-                    {[
-                      { label: t('4-Digit PIN'), value: passkeyPin, onChange: (v: string) => setPasskeyPin(v) },
-                      { label: t('Confirm PIN'), value: passkeyConfirmPin, onChange: (v: string) => setPasskeyConfirmPin(v) },
-                    ].map((field, i) => (
-                      <div key={i}>
-                        <label className="text-[10px] font-bold uppercase tracking-[0.1em] text-slate-400 dark:text-slate-500 block mb-1.5">
-                          {field.label}
-                        </label>
-                        <input
-                          type="password"
-                          inputMode="numeric"
-                          pattern="[0-9]*"
-                          maxLength={4}
-                          required
-                          value={field.value}
-                          onChange={(e) => field.onChange(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                          placeholder="••••"
-                          className="w-full px-3 py-2.5 text-center text-[18px] tracking-[0.35em] font-mono rounded-[12px] border border-black/[0.1] dark:border-white/[0.1] bg-black/[0.03] dark:bg-white/[0.05] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500/30 transition-all"
-                        />
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* PIN dots indicator */}
-                  <div className="flex items-center justify-center gap-3 py-1">
-                    {[0, 1, 2, 3].map((i) => (
-                      <motion.div
-                        key={i}
-                        animate={{
-                          scale: passkeyPin.length > i ? 1.2 : 1,
-                          backgroundColor: passkeyPin.length > i ? '#007AFF' : 'rgba(0,0,0,0.15)',
-                        }}
-                        transition={SPRING_SNAPPY}
-                        className="w-2.5 h-2.5 rounded-full"
-                      />
-                    ))}
-                    <div className="w-px h-4 bg-black/10 dark:bg-white/10 mx-1" />
-                    {[0, 1, 2, 3].map((i) => (
-                      <motion.div
-                        key={`c${i}`}
-                        animate={{
-                          scale: passkeyConfirmPin.length > i ? 1.2 : 1,
-                          backgroundColor: passkeyConfirmPin.length > i
-                            ? (passkeyPin.length === 4 && passkeyConfirmPin.length > i && passkeyPin[i] !== passkeyConfirmPin[i] ? '#FF3B30' : '#34C759')
-                            : 'rgba(0,0,0,0.15)',
-                        }}
-                        transition={SPRING_SNAPPY}
-                        className="w-2.5 h-2.5 rounded-full"
-                      />
-                    ))}
-                  </div>
-
-                  {/* Submit */}
-                  <motion.button
-                    type="submit"
-                    disabled={passkeyLoading}
-                    whileTap={passkeyLoading ? {} : { scale: 0.97 }}
-                    transition={SPRING_SNAPPY}
-                    className="w-full py-3 rounded-[14px] text-[15px] font-bold text-white flex items-center justify-center gap-2 transition-opacity disabled:opacity-60"
-                    style={{
-                      background: 'linear-gradient(135deg, #007AFF 0%, #5856D6 100%)',
-                      boxShadow: '0 8px 24px rgba(0,122,255,0.3)',
-                    }}
-                  >
-                    {passkeyLoading ? (
-                      <><Loader2 size={15} className="animate-spin" /> {t('Configuring...')}</>
-                    ) : (
-                      <><CheckCircle2 size={15} /> {hasPasskeyPin ? t('Update PIN') : t('Enable PIN')}</>
-                    )}
-                  </motion.button>
-                </form>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* ════ IMAGE CROPPER MODAL ════ */}
       <AnimatePresence>
@@ -1454,6 +1348,160 @@ export default function Settings() {
                     {isCropping ? <Loader2 size={16} className="animate-spin" /> : t('Crop & Apply')}
                   </button>
                 </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ════ CHANGE PASSWORD MODAL ════ */}
+      <AnimatePresence>
+        {showChangePasswordModal && (
+          <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="relative w-full max-w-[360px] rounded-[28px] overflow-hidden shadow-[0_30px_80px_rgba(0,0,0,0.5)] flex flex-col max-h-[90vh]"
+              style={{ background: 'rgba(28,28,30,0.95)', backdropFilter: 'blur(40px)' }}
+            >
+              <div className="p-4 border-b border-white/[0.06] flex justify-between items-center bg-[#1c1c1e]">
+                <h3 className="font-bold text-white text-[16px]">{t('Change Password')}</h3>
+                <button
+                  onClick={() => {
+                    setShowChangePasswordModal(false);
+                    setCurrentPassword('');
+                    setNewPassword('');
+                    setConfirmNewPassword('');
+                    setChangePasswordError('');
+                  }}
+                  className="p-1 rounded-full text-slate-400 hover:bg-white/[0.08]"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-5 space-y-4">
+                {changePasswordError && (
+                  <div className="p-3.5 rounded-[14px] bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-start gap-2">
+                    <AlertCircle size={14} className="shrink-0 mt-0.5" />
+                    <span>{changePasswordError}</span>
+                  </div>
+                )}
+
+                <form onSubmit={handleChangePassword} className="space-y-4">
+                  {/* Current Password */}
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block">
+                      {t('Current Password')}
+                    </label>
+                    <div className="relative flex items-center bg-white/[0.06] border border-white/[0.08] rounded-[14px] px-3.5">
+                      <input
+                        type={showCurrentPassword ? 'text' : 'password'}
+                        value={currentPassword}
+                        onChange={(e) => setCurrentPassword(e.target.value)}
+                        placeholder={t('Enter current password')}
+                        className="w-full bg-transparent py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none"
+                        required
+                        disabled={changePasswordLoading}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowCurrentPassword((prev) => !prev)}
+                        className="text-slate-400 hover:text-slate-300 focus:outline-none"
+                      >
+                        {showCurrentPassword ? (
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-eye-off"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.52 13.52 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/></svg>
+                        ) : (
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-eye"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* New Password */}
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block">
+                      {t('New Password')}
+                    </label>
+                    <div className="relative flex items-center bg-white/[0.06] border border-white/[0.08] rounded-[14px] px-3.5">
+                      <input
+                        type={showNewPassword ? 'text' : 'password'}
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        placeholder={t('Enter new password')}
+                        className="w-full bg-transparent py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none"
+                        required
+                        disabled={changePasswordLoading}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowNewPassword((prev) => !prev)}
+                        className="text-slate-400 hover:text-slate-300 focus:outline-none"
+                      >
+                        {showNewPassword ? (
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-eye-off"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.52 13.52 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/></svg>
+                        ) : (
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-eye"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                        )}
+                      </button>
+                    </div>
+                    <PasswordStrengthMeter password={newPassword} t={t} />
+                  </div>
+
+                  {/* Confirm New Password */}
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block">
+                      {t('Confirm New Password')}
+                    </label>
+                    <div className="relative flex items-center bg-white/[0.06] border border-white/[0.08] rounded-[14px] px-3.5">
+                      <input
+                        type={showConfirmNewPassword ? 'text' : 'password'}
+                        value={confirmNewPassword}
+                        onChange={(e) => setConfirmNewPassword(e.target.value)}
+                        placeholder={t('Re-enter new password')}
+                        className="w-full bg-transparent py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none"
+                        required
+                        disabled={changePasswordLoading}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmNewPassword((prev) => !prev)}
+                        className="text-slate-400 hover:text-slate-300 focus:outline-none"
+                      >
+                        {showConfirmNewPassword ? (
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-eye-off"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.52 13.52 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/></svg>
+                        ) : (
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-eye"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowChangePasswordModal(false);
+                        setCurrentPassword('');
+                        setNewPassword('');
+                        setConfirmNewPassword('');
+                        setChangePasswordError('');
+                      }}
+                      className="flex-1 py-2.5 rounded-[12px] font-bold text-slate-300 bg-white/[0.06] hover:bg-white/[0.1] transition-colors text-[14px]"
+                      disabled={changePasswordLoading}
+                    >
+                      {t('Cancel')}
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={changePasswordLoading}
+                      className="flex-1 py-2.5 rounded-[12px] font-bold text-white bg-primary-500 hover:bg-primary-600 shadow-lg shadow-primary-500/20 disabled:opacity-50 flex items-center justify-center gap-2 transition-all text-[14px]"
+                    >
+                      {changePasswordLoading ? <Loader2 size={16} className="animate-spin" /> : t('Update')}
+                    </button>
+                  </div>
+                </form>
               </div>
             </motion.div>
           </div>
