@@ -89,17 +89,17 @@ export interface DownloadResponse {
   message: string;
 }
 
-export const downloadBase64File = async (base64Data: string, filename: string): Promise<DownloadResponse> => {
+export const downloadBase64File = async (base64Data: string, filename: string, mimeType?: string): Promise<DownloadResponse> => {
   try {
     const formattedName = formatDateFilename(filename);
     
+    let pureBase64 = base64Data;
+    if (base64Data.includes('base64,')) {
+      pureBase64 = base64Data.split('base64,')[1];
+    }
+    
     if (Capacitor.isNativePlatform()) {
       const { Filesystem, Directory } = await import('@capacitor/filesystem');
-      
-      let pureBase64 = base64Data;
-      if (base64Data.includes('base64,')) {
-        pureBase64 = base64Data.split('base64,')[1];
-      }
 
       await Filesystem.writeFile({
         path: formattedName,
@@ -129,12 +129,26 @@ export const downloadBase64File = async (base64Data: string, filename: string): 
 
       return { success: true, message: `Saved to Cache: ${formattedName}` };
     } else {
-      const link = document.createElement('a');
-      link.href = base64Data;
-      link.download = formattedName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      // Web browser: Convert base64 to Blob & Blob Object URL to guarantee browser download success without freezing UI
+      const byteCharacters = atob(pureBase64);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: mimeType || 'application/octet-stream' });
+      const blobUrl = URL.createObjectURL(blob);
+
+      setTimeout(() => {
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = formattedName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
+      }, 50);
+
       return { success: true, message: `Download started: ${formattedName}` };
     }
   } catch (err: any) {

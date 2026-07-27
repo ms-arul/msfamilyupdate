@@ -9,6 +9,7 @@ import { useFinance } from '../context/FinanceContext';
 import PageLoader from './ui/PageLoader';
 import { supabase } from '../lib/supabase';
 import { pageVariants, pageTransition, pageMobileVariants, pageMobileTransition, SPRINGS } from '../utils/animations';
+import { registerBackButtonHandler } from '../utils/backButtonManager';
 
 // Lazy load notifications panel
 const Notifications = lazy(() => import('../pages/Notifications'));
@@ -218,6 +219,34 @@ export default function Layout() {
     try { await logout(); } catch (err) { console.error('Logout error:', err); }
     finally { navigate('/login', { replace: true }); }
   }, [logout, navigate]);
+
+  // Register overlays with BackButtonManager for physical back button handling
+  useEffect(() => {
+    if (showLogoutConfirm) {
+      return registerBackButtonHandler('layout_logout_confirm', 110, () => {
+        setShowLogoutConfirm(false);
+        return true;
+      });
+    }
+  }, [showLogoutConfirm]);
+
+  useEffect(() => {
+    if (isNotificationsOpen) {
+      return registerBackButtonHandler('layout_notifications_panel', 100, () => {
+        setNotificationsOpen(false);
+        return true;
+      });
+    }
+  }, [isNotificationsOpen]);
+
+  useEffect(() => {
+    if (mobileOpen) {
+      return registerBackButtonHandler('layout_mobile_drawer', 90, () => {
+        setMobileOpen(false);
+        return true;
+      });
+    }
+  }, [mobileOpen]);
 
   useEffect(() => {
     setMobileOpen(false);

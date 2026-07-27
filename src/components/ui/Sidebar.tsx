@@ -154,7 +154,7 @@ export const DesktopSidebar = forwardRef<HTMLElement, DesktopSidebarProps>(({ us
             <motion.div
               initial={{ opacity: 0 }}
               whileHover={{ opacity: 1 }}
-              className="absolute inset-0 bg-gradient-to-r from-primary-500/5 via-transparent to-transparent"
+              className="absolute inset-0 bg-gradient-to-r from-primary-500/5 via-transparent to-transparent pointer-events-none"
             />
 
             <div className="relative z-10 flex items-center gap-2 mb-3">
@@ -189,8 +189,12 @@ export const DesktopSidebar = forwardRef<HTMLElement, DesktopSidebarProps>(({ us
 
             {/* Logout Button */}
             <button
-              onClick={handleLogout}
-              className="w-full flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg bg-red-50 dark:bg-red-500/10 text-red-500 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20 transition-all duration-300 border border-red-200/50 dark:border-red-500/20"
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleLogout();
+              }}
+              className="relative z-20 w-full flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg bg-red-50 dark:bg-red-500/10 text-red-500 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20 transition-all duration-300 border border-red-200/50 dark:border-red-500/20 cursor-pointer active:scale-95"
             >
               <LogOut size={14} />
               <span className="text-[13px] font-semibold">{t('Sign Out')}</span>

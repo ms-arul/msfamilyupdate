@@ -89,9 +89,37 @@ class TransactionCachePlugin : Plugin() {
                 }
                 db.transactionDao().insertAll(entities)
                 db.transactionDao().pruneOldEntries(1000)
+                
+                // Refresh native Glance widgets
+                WidgetUpdateManager.updateAllWidgets(context)
+                
                 call.resolve()
             } catch (e: Exception) {
                 call.reject("Failed to cache transactions: ${e.message}")
+            }
+        }
+    }
+
+    @PluginMethod
+    fun cachePreferences(call: PluginCall) {
+        val budgetLimit = call.getDouble("budget_limit", 3000.0)
+        val savingsTarget = call.getDouble("savings_target", 10000.0)
+        
+        ioScope.launch {
+            try {
+                val prefs = context.getSharedPreferences("WidgetPrefs", android.content.Context.MODE_PRIVATE)
+                prefs.edit().apply {
+                    putFloat("budget_limit", budgetLimit?.toFloat() ?: 3000.0f)
+                    putFloat("savings_target", savingsTarget?.toFloat() ?: 10000.0f)
+                    apply()
+                }
+                
+                // Refresh native Glance widgets
+                WidgetUpdateManager.updateAllWidgets(context)
+                
+                call.resolve()
+            } catch (e: Exception) {
+                call.reject("Failed to cache preferences: ${e.message}")
             }
         }
     }
@@ -102,6 +130,10 @@ class TransactionCachePlugin : Plugin() {
             try {
                 val db = TransactionDatabase.getDatabase(context)
                 db.transactionDao().clearCache()
+                
+                // Refresh native Glance widgets
+                WidgetUpdateManager.updateAllWidgets(context)
+                
                 call.resolve()
             } catch (e: Exception) {
                 call.reject("Failed to clear cache: ${e.message}")

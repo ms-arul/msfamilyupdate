@@ -109,15 +109,27 @@ function savePendingSms(entries: PendingSmsEntry[]): void {
 
 // ── Helper: Map DB row to Transaction ────────────────────────────────────────
 function mapDbToTransaction(tx: any): Transaction {
-  const d = new Date(tx.date);
+  let year = new Date().getFullYear();
+  let month = new Date().getMonth() + 1;
+  if (tx.date) {
+    const parts = String(tx.date).split('T')[0].split('-');
+    if (parts.length === 3) {
+      year = parseInt(parts[0], 10);
+      month = parseInt(parts[1], 10);
+    } else {
+      const d = new Date(tx.date);
+      year = d.getFullYear();
+      month = d.getMonth() + 1;
+    }
+  }
   return {
     id: tx.id,
     amount: Number(tx.amount),
     category: tx.category,
     type: tx.type as TransactionType,
     date: tx.date,
-    month: d.getMonth() + 1,
-    year: d.getFullYear(),
+    month,
+    year,
     notes: tx.notes || '',
     memberId: tx.member_id,
     memberName: (tx.profiles as any)?.name || 'Unknown',
@@ -290,9 +302,9 @@ export const FinanceProvider: React.FC<FinanceProviderProps> = ({ children }) =>
             profiles:profiles!transactions_member_id_fkey ( name )
           `);
 
-        // CRITICAL: Scope by family_id if available, otherwise fall back to member_id
+        // Scope query to fetch both family transactions and member's own personal transactions
         if (currentFamilyId) {
-          query = query.eq('family_id', currentFamilyId);
+          query = query.or(`family_id.eq.${currentFamilyId},member_id.eq.${currentUserId}`);
         } else {
           query = query.eq('member_id', currentUserId);
         }
@@ -310,10 +322,18 @@ export const FinanceProvider: React.FC<FinanceProviderProps> = ({ children }) =>
 
         const mapped = (data || []).map(mapDbToTransaction);
 
-        setTransactions(mapped.slice(0, 1000));
+        setTransactions(prev => {
+          if (mapped.length === 0 && prev.length > 0) {
+            console.warn('[Finance] Received 0 transactions from server while existing transactions exist in state. Preserving current state.');
+            return prev;
+          }
+          return mapped.slice(0, 1000);
+        });
         
         // Update cache
-        await cacheTransactions(mapped);
+        if (mapped.length > 0) {
+          await cacheTransactions(mapped);
+        }
         success = true;
       } catch (err: any) {
         console.error(`[Finance] Error fetching transactions (attempt ${attempt}/${maxAttempts}):`, err);
@@ -336,6 +356,20 @@ export const FinanceProvider: React.FC<FinanceProviderProps> = ({ children }) =>
   useEffect(() => {
     fetchTransactions();
   }, [fetchTransactions, user, familyId]);
+
+  // ── Listen for global auth session refresh/recovery events ────────────────
+  useEffect(() => {
+    const handleAuthRefreshed = () => {
+      console.log('[Finance] Auth session refreshed event received. Re-fetching transactions...');
+      lastFetchTimeRef.current = 0;
+      fetchTransactions(true);
+    };
+
+    window.addEventListener('msfamily_auth_refreshed', handleAuthRefreshed);
+    return () => {
+      window.removeEventListener('msfamily_auth_refreshed', handleAuthRefreshed);
+    };
+  }, [fetchTransactions]);
 
   // ── Realtime subscription — FAMILY SCOPED (BUG 9) ─────────────────────────
   useEffect(() => {
@@ -609,16 +643,10 @@ export const FinanceProvider: React.FC<FinanceProviderProps> = ({ children }) =>
       }
     }
 
-    // ── LOW CONFIDENCE CHECK: route to pending queue ──
-    const confidence = parsedSms.confidence || 0;
-    if (confidence < 0.70) {
-      console.log(`[SMS Finance] Low confidence (${(confidence * 100).toFixed(0)}%) — routing to pending queue`);
-      setPendingSmsTransactions(prev => {
-        const updated = [...prev, { parsedSms, timestamp: Date.now() }];
-        savePendingSms(updated);
-        return updated;
-      });
-      return;
+    // ── LOW CONFIDENCE CHECK: Mark for review (<75% accuracy rate) ──
+    const confidence = parsedSms.confidence || 0.65;
+    if (confidence < 0.75) {
+      console.log(`[SMS Finance] Low confidence (${(confidence * 100).toFixed(0)}%) — inserting into database marked for review on Transactions page`);
     }
 
     console.log('[SMS Finance] Processing queued SMS insert for key:', dedupKey);
@@ -736,6 +764,19 @@ export const FinanceProvider: React.FC<FinanceProviderProps> = ({ children }) =>
     return currentInsert;
   }, [processSingleSmsTransaction]);
 
+  // Flush legacy pending SMS entries to database marked for review
+  useEffect(() => {
+    if (!user || pendingSmsTransactions.length === 0) return;
+    const pendingToProcess = [...pendingSmsTransactions];
+    setPendingSmsTransactions([]);
+    savePendingSms([]);
+    pendingToProcess.forEach(entry => {
+      if (entry?.parsedSms) {
+        addSmsTransaction(entry.parsedSms);
+      }
+    });
+  }, [user, pendingSmsTransactions, addSmsTransaction]);
+
   // ── Pending SMS Confirm / Dismiss ──────────────────────────────────────────
   const confirmPendingSms = useCallback(async (index: number) => {
     const entry = pendingSmsTransactions[index];
@@ -787,13 +828,13 @@ export const FinanceProvider: React.FC<FinanceProviderProps> = ({ children }) =>
     const balance = totalIncome - totalExpense;
 
     // Personal isolated stats
-    const personalTransactions = currentMonthTransactions.filter(t => t.memberId === user?.id);
+    const personalTransactions = currentMonthTransactions.filter(t => !t.memberId || t.memberId === user?.id);
     const personalIncome = personalTransactions.filter(t => t.type === 'income').reduce((acc, curr) => acc + Number(curr.amount), 0);
     const personalExpense = personalTransactions.filter(t => t.type === 'expense').reduce((acc, curr) => acc + Number(curr.amount), 0);
     const personalBalance = personalIncome - personalExpense;
 
     // Make all personal transactions available for historical graphs/history (unfiltered by month)
-    const allPersonalTransactions = transactions.filter(t => t.memberId === user?.id);
+    const allPersonalTransactions = transactions.filter(t => !t.memberId || t.memberId === user?.id);
 
     const allTimeBalance = transactions.reduce((acc, curr) => curr.type === 'income' ? acc + Number(curr.amount) : acc - Number(curr.amount), 0);
     const allTimePersonalBalance = allPersonalTransactions.reduce((acc, curr) => curr.type === 'income' ? acc + Number(curr.amount) : acc - Number(curr.amount), 0);

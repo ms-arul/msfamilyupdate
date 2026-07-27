@@ -1,5 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { applyTheme, ThemeMode } from './themeService';
+import { TransactionCache } from '../plugins';
+import { Capacitor } from '@capacitor/core';
 
 export interface UserPreferences {
   theme: ThemeMode;
@@ -62,6 +64,7 @@ export const loadPreferences = async (userId: string): Promise<UserPreferences> 
     };
 
     applyToLocal(prefs);
+    syncPreferencesToNative(prefs.budget_limit, prefs.savings_target);
     return prefs;
   } catch (err) {
     console.error('Unexpected error loading preferences:', err);
@@ -71,6 +74,7 @@ export const loadPreferences = async (userId: string): Promise<UserPreferences> 
 
 export const savePreferences = async (userId: string, prefs: UserPreferences): Promise<boolean> => {
   applyToLocal(prefs);
+  syncPreferencesToNative(prefs.budget_limit, prefs.savings_target);
 
   try {
     const { error } = await supabase
@@ -111,6 +115,14 @@ export const saveSinglePreference = async (userId: string, key: keyof UserPrefer
     localStorage.setItem(localKey, String(value));
   }
 
+  if (key === 'budget_limit') {
+    const target = Number(localStorage.getItem(LOCAL_KEYS.savingsTarget)) || 10000;
+    syncPreferencesToNative(Number(value), target);
+  } else if (key === 'savings_target') {
+    const budget = Number(localStorage.getItem(LOCAL_KEYS.budgetLimit)) || 3000;
+    syncPreferencesToNative(budget, Number(value));
+  }
+
   try {
     const { error } = await supabase
       .from('user_preferences')
@@ -149,3 +161,16 @@ const loadFromLocal = (): UserPreferences => ({
   budget_limit: localStorage.getItem(LOCAL_KEYS.budgetLimit) ? Number(localStorage.getItem(LOCAL_KEYS.budgetLimit)) : DEFAULTS.budget_limit,
   savings_target: localStorage.getItem(LOCAL_KEYS.savingsTarget) ? Number(localStorage.getItem(LOCAL_KEYS.savingsTarget)) : DEFAULTS.savings_target,
 });
+
+const syncPreferencesToNative = async (budgetLimit: number, savingsTarget: number) => {
+  if (Capacitor.isNativePlatform() && TransactionCache && typeof (TransactionCache as any).cachePreferences === 'function') {
+    try {
+      await (TransactionCache as any).cachePreferences({
+        budget_limit: budgetLimit,
+        savings_target: savingsTarget
+      });
+    } catch (err) {
+      console.warn('[Cache] Failed to sync preferences to native:', err);
+    }
+  }
+};

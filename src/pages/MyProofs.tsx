@@ -12,8 +12,11 @@ import { invalidateStorageCache, getUserStorageUsage } from '../utils/storageSer
 import { useSubscription, FREE_STORAGE_LIMIT_BYTES } from '../context/SubscriptionContext';
 import { supabase } from '../lib/supabase';
 import { useLocation } from 'react-router-dom';
+import { generateVision } from '../utils/aiService';
+
 import { Capacitor } from '@capacitor/core';
 import { suppressLockForFilePicker } from '../utils/appLockService';
+import { registerBackButtonHandler } from '../utils/backButtonManager';
 import { CapacitorPluginMlKitTextRecognition } from '@pantrist/capacitor-plugin-ml-kit-text-recognition';
 import { Proof } from '../types/database';
 import {
@@ -168,6 +171,33 @@ export default function MyProofs() {
   useEffect(() => {
     fetchProofs();
   }, [fetchProofs]);
+
+  useEffect(() => {
+    if (showUploadModal) {
+      return registerBackButtonHandler('my_proofs_upload_modal', 100, () => {
+        setShowUploadModal(false);
+        return true;
+      });
+    }
+  }, [showUploadModal]);
+
+  useEffect(() => {
+    if (activeProof) {
+      return registerBackButtonHandler('my_proofs_lightbox', 100, () => {
+        closeLightbox();
+        return true;
+      });
+    }
+  }, [activeProof]);
+
+  useEffect(() => {
+    if (detailsProof) {
+      return registerBackButtonHandler('my_proofs_details_modal', 100, () => {
+        setDetailsProof(null);
+        return true;
+      });
+    }
+  }, [detailsProof]);
 
   // Sort: pinned first, then by created_at
   const sortedProofs = [...proofs].sort((a, b) => {
@@ -410,7 +440,6 @@ export default function MyProofs() {
       return;
     }
 
-    // Limit file size to 10MB for PDFs, 5MB for images
     const maxSize = isPdf ? 10 * 1024 * 1024 : 5 * 1024 * 1024;
     if (file.size > maxSize) {
       alert(`File size exceeds the limit (${isPdf ? '10MB' : '5MB'}).`);
@@ -418,107 +447,100 @@ export default function MyProofs() {
     }
 
     setIsUploading(true);
-    setUploadProgress(isPdf ? 'Preparing PDF...' : 'Compressing & analyzing...');
+    setUploadProgress(isPdf ? 'Preparing PDF...' : 'Analyzing document...');
     setShowUploadModal(true);
 
     try {
       if (!isPdf) {
-        file = await compressForProofs(file);
+        try {
+          file = await compressForProofs(file);
+        } catch (cErr) {
+          console.warn('[MyProofs] Compression skipped:', cErr);
+        }
       }
 
-      let extractedTitle = isPdf ? file.name.replace(/\.[^/.]+$/, "") : 'Scanned Document';
+      let extractedTitle = file.name ? file.name.replace(/\.[^/.]+$/, "") : (isPdf ? 'PDF Document' : 'Scanned Document');
       let extractedDocNum = 'N/A';
       let extractedCat = 'identity';
 
       const isNative = Capacitor.isNativePlatform();
       let geminiSuccess = false;
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
 
       if (isPdf) {
+        let previewUrl = '';
+        try { previewUrl = URL.createObjectURL(file); } catch { }
         setNewProofForm(prev => ({
           ...prev,
           title: extractedTitle,
           documentNumber: 'N/A',
           category: 'identity',
           localImage: file ?? null,
-          imageUrl: ''
+          imageUrl: previewUrl
         }));
         setUploadProgress('');
       } else {
-        // Try Gemini AI first
-        if (apiKey) {
+        // Try AI vision extraction
+        try {
+          const base64Image = await fileToBase64(file);
+          const responseText = await generateVision(
+            'Extract data to JSON: {"title": "", "documentNumber": "", "category": "identity|financial|vehicle"}',
+            base64Image,
+            file.type || 'image/jpeg',
+            {
+              systemInstruction: "You are an expert document parser. Analyze the uploaded ID, bill, or proof. Extract the 'title', the 'documentNumber'. And categorize it into EXACTLY ONE of these: 'identity', 'financial', or 'vehicle'. Output ONLY valid JSON containing these three keys.",
+              temperature: 0.1,
+              responseFormatJson: true
+            }
+          );
+          if (responseText) {
+            const cleanJson = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+            const extracted = JSON.parse(cleanJson);
+            if (extracted.title) extractedTitle = extracted.title;
+            if (extracted.documentNumber) extractedDocNum = extracted.documentNumber;
+            if (extracted.category) extractedCat = extracted.category;
+            geminiSuccess = true;
+          }
+        } catch (err) {
+          console.warn('[MyProofs] AI document extraction skipped/failed:', err);
+        }
+
+        // Try ML Kit fallback safely on Native without throwing uncaught errors
+        if (!geminiSuccess && isNative) {
           try {
-            const base64Image = await fileToBase64(file);
-            const requestBody = {
-              system_instruction: {
-                parts: [{ text: "You are an expert document parser. Analyze the uploaded ID, bill, or proof. Extract the 'title', the 'documentNumber'. And categorize it into EXACTLY ONE of these: 'identity', 'financial', or 'vehicle'. Output ONLY valid JSON containing these three keys." }]
-              },
-              contents: [{
-                parts: [
-                  { text: 'Extract data to JSON: {"title": "", "documentNumber": "", "category": "identity|financial|vehicle"}' },
-                  { inline_data: { mime_type: file.type || 'image/jpeg', data: base64Image } },
-                ]
-              }],
-              generationConfig: { response_mime_type: 'application/json', temperature: 0.1 },
-            };
-
-            const response = await fetch(
-              `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-              { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestBody) }
-            );
-
-            if (response.ok) {
-              const data = await response.json();
-              const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-              if (responseText) {
-                const cleanJson = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
-                const extracted = JSON.parse(cleanJson);
-
-                extractedTitle = extracted.title || 'Unknown Document';
-                extractedDocNum = extracted.documentNumber || 'N/A';
-                extractedCat = extracted.category || 'identity';
-                geminiSuccess = true;
+            const base64Data = await fileToBase64(file);
+            if (CapacitorPluginMlKitTextRecognition && typeof (CapacitorPluginMlKitTextRecognition as any).detectText === 'function') {
+              const result = await (CapacitorPluginMlKitTextRecognition as any).detectText({ base64Image: base64Data });
+              const text = result?.text || '';
+              if (text && text.trim() !== '') {
+                if (text.match(/\d{4}\s?\d{4}\s?\d{4}/)) {
+                  extractedTitle = 'Aadhar Card';
+                  extractedDocNum = text.match(/\d{4}\s?\d{4}\s?\d{4}/)?.[0] || 'N/A';
+                } else if (text.match(/[A-Z]{5}[0-9]{4}[A-Z]{1}/)) {
+                  extractedTitle = 'PAN Card';
+                  extractedDocNum = text.match(/[A-Z]{5}[0-9]{4}[A-Z]{1}/)?.[0] || 'N/A';
+                  extractedCat = 'financial';
+                } else if (text.toLowerCase().includes('invoice') || text.toLowerCase().includes('bill')) {
+                  extractedTitle = 'Invoice/Bill';
+                  extractedCat = 'financial';
+                } else if (text.toLowerCase().includes('vehicle') || text.toLowerCase().includes('registration')) {
+                  extractedTitle = 'Vehicle RC';
+                  extractedCat = 'vehicle';
+                } else if (text.match(/[A-Z]{2}[0-9]{2}[A-Z]{1,2}[0-9]{4}/)) {
+                  extractedTitle = 'Vehicle Reg';
+                  extractedCat = 'vehicle';
+                  extractedDocNum = text.match(/[A-Z]{2}[0-9]{2}[A-Z]{1,2}[0-9]{4}/)?.[0] || 'N/A';
+                }
               }
             }
-          } catch (geminiErr) {
-            console.warn('Gemini extraction failed, falling back...', geminiErr);
+          } catch (mlKitErr) {
+            console.warn('[MyProofs] ML Kit native OCR fallback skipped:', mlKitErr);
           }
         }
 
-        if (!geminiSuccess && isNative) {
-          // --- Fallback NATIVE: Google ML Kit ---
-          const base64Data = await fileToBase64(file);
-          const result = await (CapacitorPluginMlKitTextRecognition as any).detectText({ base64Image: base64Data });
-          const text = result.text || '';
-
-          if (!text || text.trim() === '') {
-            throw new Error('No text detected by ML Kit.');
-          }
-
-          // Simple heuristic parsing for Native
-          if (text.match(/\d{4}\s?\d{4}\s?\d{4}/)) {
-            extractedTitle = 'Aadhar Card';
-            extractedDocNum = text.match(/\d{4}\s?\d{4}\s?\d{4}/)?.[0] || 'N/A';
-          } else if (text.match(/[A-Z]{5}[0-9]{4}[A-Z]{1}/)) {
-            extractedTitle = 'PAN Card';
-            extractedDocNum = text.match(/[A-Z]{5}[0-9]{4}[A-Z]{1}/)?.[0] || 'N/A';
-            extractedCat = 'financial';
-          } else if (text.toLowerCase().includes('invoice') || text.toLowerCase().includes('bill')) {
-            extractedTitle = 'Invoice/Bill';
-            extractedCat = 'financial';
-          } else if (text.toLowerCase().includes('vehicle') || text.toLowerCase().includes('registration')) {
-            extractedTitle = 'Vehicle RC';
-            extractedCat = 'vehicle';
-          } else if (text.match(/[A-Z]{2}[0-9]{2}[A-Z]{1,2}[0-9]{4}/)) {
-            extractedTitle = 'Vehicle Reg';
-            extractedCat = 'vehicle';
-            extractedDocNum = text.match(/[A-Z]{2}[0-9]{2}[A-Z]{1,2}[0-9]{4}/)?.[0] || 'N/A';
-          } else {
-            throw new Error('Could not categorize document via ML Kit.');
-          }
-        } else if (!geminiSuccess && !isNative) {
-          throw new Error('AI extraction failed.');
-        }
+        let previewUrl = '';
+        try {
+          previewUrl = URL.createObjectURL(file);
+        } catch { }
 
         setNewProofForm(prev => ({
           ...prev,
@@ -526,20 +548,24 @@ export default function MyProofs() {
           documentNumber: extractedDocNum,
           category: extractedCat,
           localImage: file ?? null,
-          imageUrl: file ? URL.createObjectURL(file) : ''
+          imageUrl: previewUrl
         }));
         setUploadProgress('');
       }
 
     } catch (err) {
-      console.error('OCR Error:', err);
+      console.error('[MyProofs] File processing error:', err);
+      let previewUrl = '';
+      if (file) {
+        try { previewUrl = URL.createObjectURL(file); } catch { }
+      }
       setNewProofForm(prev => ({
         ...prev,
+        title: (file && file.name) ? file.name.replace(/\.[^/.]+$/, "") : 'Scanned Document',
         localImage: file ?? null,
-        imageUrl: file ? URL.createObjectURL(file) : ''
+        imageUrl: previewUrl
       }));
       setUploadProgress('');
-      alert('OCR analysis failed. Please enter details manually.');
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -549,50 +575,41 @@ export default function MyProofs() {
   const handleBackImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     let file = e.target.files?.[0];
     if (!file || !file.type.startsWith('image/')) return;
-    file = await compressForProofs(file);
+    try {
+      file = await compressForProofs(file);
+    } catch { }
+    let previewUrl = '';
+    try { previewUrl = URL.createObjectURL(file); } catch { }
     setNewProofForm(prev => ({
       ...prev,
       backLocalImage: file ?? null,
-      backImageUrl: file ? URL.createObjectURL(file) : '',
+      backImageUrl: previewUrl,
     }));
     if (backInputRef.current) backInputRef.current.value = '';
   };
 
-  // Helper: generate summary (Native: ML Kit heuristic, Web: Gemini AI)
+  // Helper: generate summary (Native: ML Kit heuristic, Web: AI)
   const generateSummaryFromBase64 = async (file: File): Promise<string[] | null> => {
     const isNative = Capacitor.isNativePlatform();
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
 
-    if (apiKey) {
-      try {
-        const base64Data = await fileToBase64(file);
-        const requestBody = {
-          system_instruction: {
-            parts: [{ text: "You are a document summarizer. Analyze the uploaded document. Provide exactly 5 concise key details as a JSON array of strings." }]
-          },
-          contents: [{
-            parts: [
-              { text: 'Summarize into exactly 5 key bullet points as a JSON array: ["point1", "point2", ...]' },
-              { inline_data: { mime_type: file.type || 'image/jpeg', data: base64Data } },
-            ]
-          }],
-          generationConfig: { response_mime_type: 'application/json', temperature: 0.1 },
-        };
-        const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-          { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestBody) }
-        );
-        if (response.ok) {
-          const data = await response.json();
-          const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (text) {
-            const clean = text.replace(/```json/g, '').replace(/```/g, '').trim();
-            return JSON.parse(clean);
-          }
+    try {
+      const base64Data = await fileToBase64(file);
+      const text = await generateVision(
+        'Summarize into exactly 5 key bullet points as a JSON array: ["point1", "point2", ...]',
+        base64Data,
+        file.type || 'image/jpeg',
+        {
+          systemInstruction: "You are a document summarizer. Analyze the uploaded document. Provide exactly 5 concise key details as a JSON array of strings.",
+          temperature: 0.1,
+          responseFormatJson: true
         }
-      } catch (err) {
-        console.warn('Gemini summary failed, falling back...', err);
+      );
+      if (text) {
+        const clean = text.replace(/```json/g, '').replace(/```/g, '').trim();
+        return JSON.parse(clean);
       }
+    } catch (err) {
+      console.warn('AI summary failed, falling back...', err);
     }
 
     if (isNative) {
@@ -925,12 +942,15 @@ export default function MyProofs() {
         <HeaderActions>
           <div className="flex shrink-0">
             <button
+              type="button"
               onClick={() => { suppressLockForFilePicker(); fileInputRef.current?.click(); }}
-              className="glass-btn relative w-10 h-10 sm:w-auto sm:px-3 sm:h-10 rounded-[12px] flex items-center justify-center gap-1.5 text-slate-600 dark:text-slate-300 transition-all focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+              className="relative w-10 h-10 sm:w-auto sm:px-3.5 sm:h-10 rounded-[14px] flex items-center justify-center gap-1.5 bg-gradient-to-r from-primary-500/25 via-purple-500/20 to-indigo-500/25 dark:from-primary-500/35 dark:via-purple-600/30 dark:to-indigo-600/35 backdrop-blur-xl border border-primary-400/40 dark:border-primary-400/50 text-primary-600 dark:text-primary-300 shadow-[0_2px_16px_rgba(124,58,237,0.3)] hover:shadow-[0_4px_24px_rgba(124,58,237,0.45)] hover:scale-[1.03] active:scale-95 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+              aria-label={t('Upload New')}
             >
-              <span className="absolute top-0 left-2 right-2 h-px bg-gradient-to-r from-transparent via-white/60 to-transparent pointer-events-none" />
-              <UploadCloud size={17} strokeWidth={2.3} />
-              <span className="hidden sm:inline text-xs font-semibold">{t('Upload New')}</span>
+              {/* Top specular highlight streak */}
+              <span className="absolute top-0 left-2 right-2 h-px bg-gradient-to-r from-transparent via-white/80 dark:via-white/40 to-transparent pointer-events-none" />
+              <UploadCloud size={18} strokeWidth={2.4} className="text-primary-500 dark:text-primary-300 drop-shadow-[0_1px_4px_rgba(124,58,237,0.4)]" />
+              <span className="hidden sm:inline text-xs font-bold text-primary-600 dark:text-primary-200 tracking-tight">{t('Upload New')}</span>
             </button>
             <input
               type="file"

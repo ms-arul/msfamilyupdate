@@ -1,12 +1,10 @@
 /**
- * Capacitor Preferences-backed storage adapter for Supabase auth.
+ * Capacitor Preferences-backed 3-tier storage adapter for Supabase auth.
  *
- * On native platforms (Android/iOS), localStorage can be wiped when the
- * WebView is destroyed (low memory, force-stop, etc.), causing the user
- * to appear logged out. This adapter persists auth tokens in Capacitor's
- * native key-value store, which survives WebView restarts.
- *
- * On web, it falls back to localStorage.
+ * Provides triple redundancy:
+ * 1. Synchronous in-memory cache (for instant reads by Supabase gotrue)
+ * 2. Web `localStorage` (for synchronous WebView persistence)
+ * 3. Capacitor Native Preferences (survives Android WebView memory clears and force-stops)
  */
 import { Capacitor } from '@capacitor/core';
 import { Preferences } from '@capacitor/preferences';
@@ -15,11 +13,24 @@ import { Preferences } from '@capacitor/preferences';
 // return the latest value without waiting for async native calls.
 const memoryCache: Record<string, string> = {};
 
+// Synchronously pre-seed memory cache from localStorage on module load
+try {
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && (k.startsWith('sb-') || k.startsWith('msfamily_'))) {
+      const v = localStorage.getItem(k);
+      if (v !== null) {
+        memoryCache[k] = v;
+      }
+    }
+  }
+} catch {}
+
 // Flag to track if we've loaded persisted data into memory
 let hydrated = false;
 
 /**
- * Pre-load all Supabase auth keys from native storage into the memory cache.
+ * Pre-load all Supabase auth and app session keys from native storage into memory and localStorage.
  * Must be called (and awaited) before creating the Supabase client.
  */
 export async function hydrateAuthStorage(): Promise<void> {
@@ -29,15 +40,31 @@ export async function hydrateAuthStorage(): Promise<void> {
   }
 
   try {
-    // Supabase stores its auth token under a key like:
-    // sb-<project-ref>-auth-token
     const { keys } = await Preferences.keys();
-    const sbKeys = keys.filter(k => k.startsWith('sb-'));
+    // Load all auth tokens (sb-) and app session keys (msfamily_)
+    const targetKeys = keys.filter(k => k.startsWith('sb-') || k.startsWith('msfamily_'));
 
-    for (const key of sbKeys) {
+    for (const key of targetKeys) {
       const { value } = await Preferences.get({ key });
       if (value !== null) {
         memoryCache[key] = value;
+        try {
+          localStorage.setItem(key, value);
+        } catch { }
+      }
+    }
+
+    // Cross-sync: check localStorage for any tokens that native Preferences might have missed
+    for (let i = 0; i < localStorage.length; i++) {
+      const lsKey = localStorage.key(i);
+      if (lsKey && (lsKey.startsWith('sb-') || lsKey.startsWith('msfamily_'))) {
+        if (!memoryCache[lsKey]) {
+          const lsVal = localStorage.getItem(lsKey);
+          if (lsVal) {
+            memoryCache[lsKey] = lsVal;
+            Preferences.set({ key: lsKey, value: lsVal }).catch(() => { });
+          }
+        }
       }
     }
   } catch (err) {
@@ -48,46 +75,61 @@ export async function hydrateAuthStorage(): Promise<void> {
 }
 
 /**
- * Custom storage adapter that conforms to the interface Supabase expects:
+ * Custom 3-tier storage adapter that conforms to the interface Supabase expects:
  *   getItem(key): string | null
  *   setItem(key, value): void
  *   removeItem(key): void
- *
- * On native, reads from the in-memory cache (populated by hydrateAuthStorage)
- * and writes are mirrored to both the cache and Capacitor Preferences.
- * On web, delegates directly to localStorage.
  */
 export const capacitorStorage = {
   getItem(key: string): string | null {
-    if (!Capacitor.isNativePlatform()) {
-      return localStorage.getItem(key);
+    // 1. Try memory cache first (instant)
+    const inMemory = memoryCache[key];
+    if (inMemory !== undefined && inMemory !== null) {
+      return inMemory;
     }
-    return memoryCache[key] ?? null;
+
+    // 2. Fallback to localStorage (synchronous disk)
+    try {
+      const fromLs = localStorage.getItem(key);
+      if (fromLs !== null) {
+        memoryCache[key] = fromLs; // sync back to memory cache
+        return fromLs;
+      }
+    } catch { }
+
+    return null;
   },
 
   setItem(key: string, value: string): void {
-    if (!Capacitor.isNativePlatform()) {
-      localStorage.setItem(key, value);
-      return;
-    }
-    // Update memory cache immediately (synchronous)
+    // 1. Update memory cache immediately
     memoryCache[key] = value;
-    // Persist to native storage (async, fire-and-forget)
-    Preferences.set({ key, value }).catch(err =>
-      console.warn('[CapacitorStorage] setItem failed:', err)
-    );
+
+    // 2. Mirror to localStorage synchronously
+    try {
+      localStorage.setItem(key, value);
+    } catch { }
+
+    // 3. Persist to native storage (async, fire-and-forget on native)
+    if (Capacitor.isNativePlatform()) {
+      Preferences.set({ key, value }).catch(err =>
+        console.warn('[CapacitorStorage] setItem failed:', err)
+      );
+    }
   },
 
   removeItem(key: string): void {
-    if (!Capacitor.isNativePlatform()) {
-      localStorage.removeItem(key);
-      return;
-    }
     delete memoryCache[key];
-    Preferences.remove({ key }).catch(err =>
-      console.warn('[CapacitorStorage] removeItem failed:', err)
-    );
+    try {
+      localStorage.removeItem(key);
+    } catch { }
+
+    if (Capacitor.isNativePlatform()) {
+      Preferences.remove({ key }).catch(err =>
+        console.warn('[CapacitorStorage] removeItem failed:', err)
+      );
+    }
   },
 };
 
 export { hydrated };
+

@@ -1287,21 +1287,23 @@ export default function Loans() {
       <HeaderActions>
         <div className="flex items-center gap-1.5">
           <button
+            type="button"
             onClick={generatePDF}
             title={t('Export PDF')}
             disabled={isGeneratingPDF}
-            className="glass-btn relative w-10 h-10 rounded-[12px] flex items-center justify-center text-slate-600 dark:text-slate-300 transition-colors disabled:opacity-40"
+            className="relative w-10 h-10 rounded-[14px] flex items-center justify-center bg-gradient-to-r from-primary-500/25 via-purple-500/20 to-indigo-500/25 dark:from-primary-500/35 dark:via-purple-600/30 dark:to-indigo-600/35 backdrop-blur-xl border border-primary-400/40 dark:border-primary-400/50 text-primary-600 dark:text-primary-300 shadow-[0_2px_16px_rgba(124,58,237,0.3)] hover:shadow-[0_4px_24px_rgba(124,58,237,0.45)] hover:scale-[1.03] active:scale-95 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary-500/50 disabled:opacity-40"
           >
-            <span className="absolute top-0 left-2 right-2 h-px bg-gradient-to-r from-transparent via-white/60 to-transparent pointer-events-none" />
-            {isGeneratingPDF ? <RefreshCw size={17} strokeWidth={2.3} className="animate-spin" /> : <Download size={17} strokeWidth={2.3} />}
+            <span className="absolute top-0 left-2 right-2 h-px bg-gradient-to-r from-transparent via-white/80 dark:via-white/40 to-transparent pointer-events-none" />
+            {isGeneratingPDF ? <RefreshCw size={18} strokeWidth={2.4} className="animate-spin text-primary-500 dark:text-primary-300" /> : <Download size={18} strokeWidth={2.4} className="text-primary-500 dark:text-primary-300 drop-shadow-[0_1px_4px_rgba(124,58,237,0.4)]" />}
           </button>
           <button
+            type="button"
             onClick={openAddModal}
-            className="glass-btn relative w-10 h-10 sm:w-auto sm:px-3 sm:h-10 rounded-[12px] flex items-center justify-center gap-1.5 text-slate-600 dark:text-slate-300 transition-all focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+            className="relative w-10 h-10 sm:w-auto sm:px-3.5 sm:h-10 rounded-[14px] flex items-center justify-center gap-1.5 bg-gradient-to-r from-primary-500/25 via-purple-500/20 to-indigo-500/25 dark:from-primary-500/35 dark:via-purple-600/30 dark:to-indigo-600/35 backdrop-blur-xl border border-primary-400/40 dark:border-primary-400/50 text-primary-600 dark:text-primary-300 shadow-[0_2px_16px_rgba(124,58,237,0.3)] hover:shadow-[0_4px_24px_rgba(124,58,237,0.45)] hover:scale-[1.03] active:scale-95 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary-500/50"
           >
-            <span className="absolute top-0 left-2 right-2 h-px bg-gradient-to-r from-transparent via-white/60 to-transparent pointer-events-none" />
-            <Plus size={17} strokeWidth={2.3} />
-            <span className="hidden sm:inline text-xs font-semibold">{t('New Record')}</span>
+            <span className="absolute top-0 left-2 right-2 h-px bg-gradient-to-r from-transparent via-white/80 dark:via-white/40 to-transparent pointer-events-none" />
+            <Plus size={18} strokeWidth={2.4} className="text-primary-500 dark:text-primary-300 drop-shadow-[0_1px_4px_rgba(124,58,237,0.4)]" />
+            <span className="hidden sm:inline text-xs font-bold text-primary-600 dark:text-primary-200 tracking-tight">{t('New Record')}</span>
           </button>
         </div>
       </HeaderActions>

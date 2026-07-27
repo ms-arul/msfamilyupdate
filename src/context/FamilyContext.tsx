@@ -232,6 +232,20 @@ export const FamilyProvider: React.FC<FamilyProviderProps> = ({ children }) => {
     fetchMyInvitations();
   }, [fetchFamilyData, fetchMyInvitations, user]);
 
+  // Listen for global auth session refresh/recovery events
+  useEffect(() => {
+    const handleAuthRefreshed = () => {
+      console.log('[FamilyContext] Auth session refreshed event received. Re-fetching family data...');
+      fetchFamilyData();
+      fetchMyInvitations();
+    };
+
+    window.addEventListener('msfamily_auth_refreshed', handleAuthRefreshed);
+    return () => {
+      window.removeEventListener('msfamily_auth_refreshed', handleAuthRefreshed);
+    };
+  }, [fetchFamilyData, fetchMyInvitations]);
+
   // ── Realtime subscriptions ────────────────────────────────────────────────
   useEffect(() => {
     if (!user) return;

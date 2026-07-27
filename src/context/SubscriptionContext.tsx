@@ -24,8 +24,13 @@ export interface Subscription {
   couponUsed: string | null;
 }
 
+export type PremiumState = 'free' | 'personal_premium' | 'family_premium' | 'expired' | 'trial' | 'grace_period';
+
 export interface SubscriptionContextType {
   planId: string;
+  status: string;
+  paymentReference: string | null;
+  premiumState: PremiumState;
   isPremium: boolean;
   expiresAt: string | null;
   features: PlanFeatures;
@@ -68,8 +73,11 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [planId, setPlanId] = useState<string>('free');
   const [status, setStatus] = useState<string>('active');
   const [expiresAt, setExpiresAt] = useState<string | null>(null);
+  const [paymentReference, setPaymentReference] = useState<string | null>(null);
   const [features, setFeatures] = useState<PlanFeatures>(defaultFeatures);
   const [loading, setLoading] = useState<boolean>(true);
+
+  const LOCAL_CACHE_KEY = 'msfamily_subscription_cache';
 
   // ── Load Subscription Details ────────────────────────────────────────────
   const fetchSubscription = useCallback(async () => {
@@ -77,6 +85,7 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
       setPlanId('free');
       setStatus('active');
       setExpiresAt(null);
+      setPaymentReference(null);
       setFeatures(defaultFeatures);
       setLoading(false);
       return;
@@ -118,16 +127,17 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         }
       }
 
-      if (!activeData) {
-        // Fallback: No active subscription record in DB means they are on the Free plan
-        setPlanId('free');
-        setStatus('active');
-        setExpiresAt(null);
-        setFeatures(defaultFeatures);
-      } else {
-        setPlanId(activeData.plan_id);
-        setStatus(activeData.status);
-        setExpiresAt(activeData.expires_at);
+      let activePlanId = 'free';
+      let activeStatus = 'active';
+      let activeExpiresAt: string | null = null;
+      let activePayRef: string | null = null;
+      let activeFeatures = defaultFeatures;
+
+      if (activeData) {
+        activePlanId = activeData.plan_id;
+        activeStatus = activeData.status;
+        activeExpiresAt = activeData.expires_at;
+        activePayRef = activeData.payment_reference || null;
 
         // Fetch plan features definition
         const { data: planData } = await supabase
@@ -137,15 +147,50 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
           .maybeSingle();
 
         if (planData?.features) {
-          setFeatures(planData.features as unknown as PlanFeatures);
+          activeFeatures = planData.features as unknown as PlanFeatures;
         }
       }
+
+      setPlanId(activePlanId);
+      setStatus(activeStatus);
+      setExpiresAt(activeExpiresAt);
+      setPaymentReference(activePayRef);
+      setFeatures(activeFeatures);
+
+      // Write to localStorage cache
+      localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify({
+        planId: activePlanId,
+        status: activeStatus,
+        expiresAt: activeExpiresAt,
+        paymentReference: activePayRef,
+        features: activeFeatures,
+        cachedAt: new Date().toISOString()
+      }));
+
     } catch (err) {
-      console.error('Error fetching subscription details:', err);
-      // Fail safe: default to Free plan
+      console.error('Error fetching subscription details, loading from cache:', err);
+      // Attempt to load from cache
+      try {
+        const cached = localStorage.getItem(LOCAL_CACHE_KEY);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          setPlanId(parsed.planId);
+          setStatus(parsed.status);
+          setExpiresAt(parsed.expiresAt);
+          setPaymentReference(parsed.paymentReference);
+          setFeatures(parsed.features);
+          setLoading(false);
+          return;
+        }
+      } catch (cacheErr) {
+        console.error('Failed to parse subscription cache:', cacheErr);
+      }
+
+      // Default fallback
       setPlanId('free');
       setStatus('active');
       setExpiresAt(null);
+      setPaymentReference(null);
       setFeatures(defaultFeatures);
     } finally {
       setLoading(false);
@@ -156,7 +201,17 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
   useEffect(() => {
     fetchSubscription();
 
-    if (!user) return;
+    const handleAuthRefreshed = () => {
+      console.log('[SubscriptionContext] Auth session refreshed event received. Re-fetching subscription...');
+      fetchSubscription();
+    };
+    window.addEventListener('msfamily_auth_refreshed', handleAuthRefreshed);
+
+    if (!user) {
+      return () => {
+        window.removeEventListener('msfamily_auth_refreshed', handleAuthRefreshed);
+      };
+    }
 
     const channel = supabase
       .channel('realtime_subscriptions')
@@ -175,6 +230,7 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
       .subscribe();
 
     return () => {
+      window.removeEventListener('msfamily_auth_refreshed', handleAuthRefreshed);
       supabase.removeChannel(channel);
     };
   }, [user, family?.id, fetchSubscription]);
@@ -301,10 +357,62 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
   }, [user, family?.id, fetchSubscription]);
 
   const [showUpgradeModal, setShowUpgradeModal] = useState<boolean>(false);
-  const isPremium = useMemo(() => planId !== 'free' && status === 'active', [planId, status]);
+
+  // Auto-revalidate subscription when going online
+  useEffect(() => {
+    const handleOnline = () => {
+      console.log('[Subscription] Network online, revalidating subscription...');
+      fetchSubscription();
+    };
+
+    window.addEventListener('online', handleOnline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+    };
+  }, [fetchSubscription]);
+
+  const premiumState = useMemo<PremiumState>(() => {
+    if (planId === 'free') return 'free';
+
+    const now = new Date();
+    const expiry = expiresAt ? new Date(expiresAt) : null;
+
+    // Check if expired
+    const isExpired = status === 'expired' || (expiry && now > expiry);
+
+    if (isExpired) {
+      // 3 days grace period
+      if (expiry && (now.getTime() - expiry.getTime() < 3 * 24 * 60 * 60 * 1000)) {
+        return 'grace_period';
+      }
+      return 'expired';
+    }
+
+    // Check for trial
+    if (paymentReference === 'trial' || paymentReference === 'TRIAL') {
+      return 'trial';
+    }
+
+    if (planId.startsWith('family_')) {
+      return 'family_premium';
+    }
+
+    if (planId.startsWith('personal_') || planId.startsWith('premium_')) {
+      return 'personal_premium';
+    }
+
+    return 'free';
+  }, [planId, status, expiresAt, paymentReference]);
+
+  const isPremium = useMemo(() => {
+    return premiumState !== 'free' && premiumState !== 'expired';
+  }, [premiumState]);
 
   const contextValue = useMemo<SubscriptionContextType>(() => ({
     planId,
+    status,
+    paymentReference,
+    premiumState,
     isPremium,
     expiresAt,
     features,
@@ -318,6 +426,9 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
     setShowUpgradeModal
   }), [
     planId,
+    status,
+    paymentReference,
+    premiumState,
     isPremium,
     expiresAt,
     features,

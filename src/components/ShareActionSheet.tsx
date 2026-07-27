@@ -4,6 +4,8 @@ import { App as CapacitorApp } from '@capacitor/app';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FileText, ShieldCheck, X } from 'lucide-react';
 
+import { registerBackButtonHandler } from '../utils/backButtonManager';
+
 interface ShareData {
   text?: string;
   imageUri?: string;
@@ -14,6 +16,15 @@ const ShareActionSheet: React.FC = () => {
   const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [shareData, setShareData] = useState<ShareData | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      return registerBackButtonHandler('share_action_sheet', 100, () => {
+        setIsOpen(false);
+        return true;
+      });
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     // Listen for Deep Links and Share Targets
@@ -43,9 +54,22 @@ const ShareActionSheet: React.FC = () => {
             setIsOpen(true);
           }
         } else if (host === 'addtransaction' || host === 'add') {
-          navigate('/add');
+          const type = urlObj.searchParams.get('type');
+          const scan = urlObj.searchParams.get('scan');
+          if (type) {
+            navigate(`/add?type=${type}`);
+          } else if (scan === 'true') {
+            navigate('/add?scan=true');
+          } else {
+            navigate('/add');
+          }
         } else if (host === 'myproofs' || host === 'proofs') {
-          navigate('/proofs');
+          const upload = urlObj.searchParams.get('upload');
+          if (upload === 'true') {
+            navigate('/proofs?upload=true');
+          } else {
+            navigate('/proofs');
+          }
         } else if (host === 'loans') {
           navigate('/loans');
         } else if (host === 'family') {

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { createPortal } from 'react-dom';
 import {
   Sparkles,
   CreditCard,
@@ -25,6 +26,7 @@ import { useAuth } from '../context/AuthContext';
 import { useFamily } from '../context/FamilyContext';
 import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
+import { getUserStorageUsage, formatBytes } from '../utils/storageService';
 
 // Spring animation configs
 const SPRING_SOFT = { type: 'spring', stiffness: 380, damping: 30 } as const;
@@ -66,10 +68,26 @@ export default function SubscriptionPage() {
   const [isPaying, setIsPaying] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
+  const [paymentReceipt, setPaymentReceipt] = useState<{
+    status: 'success' | 'failed';
+    paymentId?: string;
+    orderId?: string;
+    amount: number;
+    planName: string;
+    date: string;
+    errorMessage?: string;
+  } | null>(null);
 
   // History logs states
   const [payments, setPayments] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
+
+  // Restore states
+  const [isRestoring, setIsRestoring] = useState(false);
+
+  // Storage usage states
+  const [storageUsage, setStorageUsage] = useState<{ usedBytes: number; limitBytes: number; percentage: number } | null>(null);
+  const [loadingStorage, setLoadingStorage] = useState(true);
 
   // Dynamically load Razorpay checkout script
   useEffect(() => {
@@ -106,6 +124,50 @@ export default function SubscriptionPage() {
       fetchPaymentHistory();
     }
   }, [user?.id, fetchPaymentHistory]);
+
+  const loadStorage = useCallback(async () => {
+    if (!user?.id) return;
+    try {
+      setLoadingStorage(true);
+      const data = await getUserStorageUsage(user.id);
+      setStorageUsage({
+        usedBytes: data.usedBytes,
+        limitBytes: data.limitBytes,
+        percentage: data.percentage
+      });
+    } catch (err) {
+      console.error('Failed to load storage usage:', err);
+    } finally {
+      setLoadingStorage(false);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (user?.id) {
+      loadStorage();
+    }
+  }, [user?.id, loadStorage]);
+
+  const handleRestorePurchases = async () => {
+    setIsRestoring(true);
+    try {
+      // Simulate API verification delay
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      await refreshSubscription();
+      alert(t('Purchase history synchronized and restored.'));
+    } catch (err: any) {
+      alert(t('Restore failed: ') + err.message);
+    } finally {
+      setIsRestoring(false);
+    }
+  };
+
+  const remainingDays = React.useMemo(() => {
+    if (!expiresAt) return null;
+    const diffTime = new Date(expiresAt).getTime() - new Date().getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays > 0 ? diffDays : 0;
+  }, [expiresAt]);
 
   const handleRedeem = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -158,7 +220,9 @@ export default function SubscriptionPage() {
         currency: "INR",
         name: "MS Family Premium",
         description: planType === 'family' ? "Family Premium Subscription" : "Personal Premium Subscription",
-        image: "/mslogo.png",
+        image: window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1')
+          ? ""
+          : `${window.location.origin}/mslogo.png`,
         order_id: orderRes.orderId,
         handler: async function (response: any) {
           try {
@@ -175,6 +239,14 @@ export default function SubscriptionPage() {
 
             if (verifyRes.success) {
               setPaymentSuccess(true);
+              setPaymentReceipt({
+                status: 'success',
+                paymentId: response.razorpay_payment_id,
+                orderId: response.razorpay_order_id,
+                amount: orderRes.amount ? orderRes.amount / 100 : 0,
+                planName: planType === 'family' ? (billingInterval === 'yearly' ? 'Family Premium Yearly' : 'Family Premium Monthly') : (billingInterval === 'yearly' ? 'Personal Premium Yearly' : 'Personal Premium Monthly'),
+                date: new Date().toLocaleString(),
+              });
               await refreshSubscription();
               await fetchPaymentHistory();
               setTimeout(() => {
@@ -182,9 +254,23 @@ export default function SubscriptionPage() {
               }, 3000);
             } else {
               setPaymentError(verifyRes.message);
+              setPaymentReceipt({
+                status: 'failed',
+                amount: orderRes.amount ? orderRes.amount / 100 : 0,
+                planName: planType === 'family' ? (billingInterval === 'yearly' ? 'Family Premium Yearly' : 'Family Premium Monthly') : (billingInterval === 'yearly' ? 'Personal Premium Yearly' : 'Personal Premium Monthly'),
+                date: new Date().toLocaleString(),
+                errorMessage: verifyRes.message || 'Signature verification failed.',
+              });
             }
           } catch (err: any) {
             setPaymentError(err.message || 'Payment verification failed.');
+            setPaymentReceipt({
+              status: 'failed',
+              amount: orderRes.amount ? orderRes.amount / 100 : 0,
+              planName: planType === 'family' ? (billingInterval === 'yearly' ? 'Family Premium Yearly' : 'Family Premium Monthly') : (billingInterval === 'yearly' ? 'Personal Premium Yearly' : 'Personal Premium Monthly'),
+              date: new Date().toLocaleString(),
+              errorMessage: err.message || 'Payment verification failed.',
+            });
           } finally {
             setIsPaying(false);
           }
@@ -205,12 +291,26 @@ export default function SubscriptionPage() {
       const rzp = new (window as any).Razorpay(options);
       rzp.on('payment.failed', function (resp: any) {
         setPaymentError(resp.error?.description || 'Payment failed.');
+        setPaymentReceipt({
+          status: 'failed',
+          amount: orderRes.amount ? orderRes.amount / 100 : 0,
+          planName: planType === 'family' ? (billingInterval === 'yearly' ? 'Family Premium Yearly' : 'Family Premium Monthly') : (billingInterval === 'yearly' ? 'Personal Premium Yearly' : 'Personal Premium Monthly'),
+          date: new Date().toLocaleString(),
+          errorMessage: resp.error?.description || 'Payment failed.',
+        });
         setIsPaying(false);
       });
       rzp.open();
 
     } catch (err: any) {
       setPaymentError(err.message || 'Payment processing failed.');
+      setPaymentReceipt({
+        status: 'failed',
+        amount: 0,
+        planName: planType === 'family' ? (billingInterval === 'yearly' ? 'Family Premium Yearly' : 'Family Premium Monthly') : (billingInterval === 'yearly' ? 'Personal Premium Yearly' : 'Personal Premium Monthly'),
+        date: new Date().toLocaleString(),
+        errorMessage: err.message || 'Payment processing failed.',
+      });
       setIsPaying(false);
     }
   };
@@ -266,12 +366,20 @@ export default function SubscriptionPage() {
               {expiresAt && (
                 <div className="flex justify-between text-[11px]">
                   <span className="text-slate-400">{t('Renewal Date')}</span>
-                  <span className="font-bold text-slate-700 dark:text-slate-300">{new Date(expiresAt).toLocaleDateString()}</span>
+                  <span className="font-bold text-slate-700 dark:text-slate-350">{new Date(expiresAt).toLocaleDateString()}</span>
+                </div>
+              )}
+              {remainingDays !== null && (
+                <div className="flex justify-between text-[11px] items-center">
+                  <span className="text-slate-400">{t('Time Remaining')}</span>
+                  <span className="px-2 py-0.5 rounded-full bg-primary-500/10 text-primary-500 font-extrabold text-[9px]">
+                    {remainingDays} {t('days remaining')}
+                  </span>
                 </div>
               )}
               <div className="flex justify-between text-[11px]">
                 <span className="text-slate-400">{t('Price / Cycle')}</span>
-                <span className="font-bold text-slate-700 dark:text-slate-300">
+                <span className="font-bold text-slate-700 dark:text-slate-350">
                   {planId.includes('family') ? (planId.includes('yearly') ? '₹299/yr' : '₹29/mo') :
                    planId.includes('personal') ? (planId.includes('yearly') ? '₹99/yr' : '₹9/mo') :
                    '₹0'}
@@ -279,7 +387,7 @@ export default function SubscriptionPage() {
               </div>
               <div className="flex justify-between text-[11px]">
                 <span className="text-slate-400">{t('Billing Mode')}</span>
-                <span className="font-bold text-slate-700 dark:text-slate-300">
+                <span className="font-bold text-slate-700 dark:text-slate-350">
                   {planId.includes('family') ? t('Family Protected') :
                    planId.includes('personal') ? t('Personal Access') :
                    t('Individual')}
@@ -287,6 +395,21 @@ export default function SubscriptionPage() {
               </div>
             </div>
 
+            {/* Restore Purchases Button */}
+            <button
+              type="button"
+              onClick={handleRestorePurchases}
+              disabled={isRestoring}
+              className="mt-4 w-full py-2 border border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/[0.02] active:scale-95 transition-all text-[11px] font-bold text-slate-500 dark:text-slate-400 rounded-2xl flex items-center justify-center gap-1.5"
+            >
+              {isRestoring ? (
+                <Loader2 size={12} className="animate-spin text-slate-400" />
+              ) : (
+                <History size={12} />
+              )}
+              {t('Restore Purchases')}
+            </button>
+            
             {paymentSuccess && (
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
@@ -332,6 +455,47 @@ export default function SubscriptionPage() {
               <p className="text-[10px] text-emerald-500 font-medium mt-2 flex items-center gap-1">
                 <CheckCircle size={10} /> {couponSuccess}
               </p>
+            )}
+          </div>
+
+          {/* Storage Footprint Panel */}
+          <div className={`${glass.card} rounded-3xl p-5`}>
+            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block mb-2">{t('Storage Footprint')}</span>
+            {loadingStorage ? (
+              <div className="flex justify-center items-center py-4">
+                <Loader2 className="animate-spin text-primary-500" size={16} />
+              </div>
+            ) : storageUsage ? (
+              <div className="space-y-3">
+                <div className="flex justify-between items-baseline text-xs">
+                  <span className="font-extrabold text-slate-800 dark:text-slate-100">
+                    {formatBytes(storageUsage.usedBytes)} <span className="text-[10px] text-slate-400 font-normal">{t('of')} {formatBytes(storageUsage.limitBytes)} {t('used')}</span>
+                  </span>
+                  <span className="text-[10px] font-bold text-slate-400">
+                    {storageUsage.percentage.toFixed(0)}%
+                  </span>
+                </div>
+                
+                {/* Progress bar */}
+                <div className="w-full h-2 rounded-full bg-slate-100 dark:bg-white/[0.04] overflow-hidden">
+                  <div 
+                    className={`h-full rounded-full bg-gradient-to-r ${
+                      storageUsage.percentage > 90 ? 'from-rose-500 to-orange-500' :
+                      storageUsage.percentage > 70 ? 'from-amber-500 to-orange-500' :
+                      'from-primary-500 to-indigo-500'
+                    }`} 
+                    style={{ width: `${Math.min(100, storageUsage.percentage)}%` }}
+                  />
+                </div>
+                
+                <p className="text-[9px] text-slate-400 leading-snug">
+                  {isPremium 
+                    ? t('You have 5 GB Premium limit.')
+                    : t('Upgrade for 5 GB storage.')}
+                </p>
+              </div>
+            ) : (
+              <p className="text-[10px] text-slate-400">{t('Failed to load storage details.')}</p>
             )}
           </div>
 
@@ -512,6 +676,65 @@ export default function SubscriptionPage() {
 
       </div>
 
+      {/* Plan Feature Comparison Table */}
+      <div className={`${glass.card} rounded-3xl p-5 sm:p-6 overflow-hidden`}>
+        <h3 className="font-extrabold text-slate-800 dark:text-slate-100 flex items-center gap-2 text-sm uppercase tracking-widest mb-4">
+          <Layers size={16} className="text-primary-500" />
+          {t('Feature Comparison')}
+        </h3>
+        
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs border-collapse min-w-[500px]">
+            <thead>
+              <tr className="text-slate-400 border-b border-slate-200/50 dark:border-white/5 pb-2">
+                <th className="pb-3 font-semibold w-1/3">{t('Feature')}</th>
+                <th className="pb-3 font-semibold text-center">{t('Free')}</th>
+                <th className="pb-3 font-semibold text-center text-primary-500">{t('Personal')}</th>
+                <th className="pb-3 font-semibold text-center text-amber-500">{t('Family')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="border-b border-slate-200/50 dark:border-white/5 hover:bg-slate-50/40 dark:hover:bg-white/[0.01] transition-colors">
+                <td className="py-3 font-medium text-slate-700 dark:text-slate-350">{t('Price')}</td>
+                <td className="py-3 text-center text-slate-500 dark:text-slate-400">{t('Free')}</td>
+                <td className="py-3 text-center text-slate-700 dark:text-slate-200 font-bold">₹9/mo / ₹99/yr</td>
+                <td className="py-3 text-center text-slate-700 dark:text-slate-200 font-bold">₹29/mo / ₹299/yr</td>
+              </tr>
+              <tr className="border-b border-slate-200/50 dark:border-white/5 hover:bg-slate-50/40 dark:hover:bg-white/[0.01] transition-colors">
+                <td className="py-3 font-medium text-slate-700 dark:text-slate-350">{t('Family Members')}</td>
+                <td className="py-3 text-center text-slate-500 dark:text-slate-400">5 {t('Members')}</td>
+                <td className="py-3 text-center text-slate-700 dark:text-slate-200">1 {t('Member')}</td>
+                <td className="py-3 text-center text-slate-700 dark:text-slate-200">5 {t('Members')}</td>
+              </tr>
+              <tr className="border-b border-slate-200/50 dark:border-white/5 hover:bg-slate-50/40 dark:hover:bg-white/[0.01] transition-colors">
+                <td className="py-3 font-medium text-slate-700 dark:text-slate-350">{t('Cloud Storage')}</td>
+                <td className="py-3 text-center text-slate-500 dark:text-slate-400">500 MB</td>
+                <td className="py-3 text-center text-slate-700 dark:text-slate-200 font-bold">100 GB</td>
+                <td className="py-3 text-center text-slate-700 dark:text-slate-200 font-bold">100 GB</td>
+              </tr>
+              <tr className="border-b border-slate-200/50 dark:border-white/5 hover:bg-slate-50/40 dark:hover:bg-white/[0.01] transition-colors">
+                <td className="py-3 font-medium text-slate-700 dark:text-slate-350">{t('AI Smart Insights')}</td>
+                <td className="py-3 text-center text-slate-500 dark:text-slate-400">{t('Basic')}</td>
+                <td className="py-3 text-center text-slate-700 dark:text-slate-200">{t('Advanced')}</td>
+                <td className="py-3 text-center text-slate-700 dark:text-slate-200">{t('Advanced')}</td>
+              </tr>
+              <tr className="border-b border-slate-200/50 dark:border-white/5 hover:bg-slate-50/40 dark:hover:bg-white/[0.01] transition-colors">
+                <td className="py-3 font-medium text-slate-700 dark:text-slate-350">{t('Live Family Tracking')}</td>
+                <td className="py-3 text-center text-slate-500 dark:text-slate-400">✕</td>
+                <td className="py-3 text-center text-slate-500 dark:text-slate-400">✕</td>
+                <td className="py-3 text-center text-slate-700 dark:text-slate-200 font-bold text-amber-500">✓</td>
+              </tr>
+              <tr className="border-b border-slate-200/50 dark:border-white/5 hover:bg-slate-50/40 dark:hover:bg-white/[0.01] transition-colors">
+                <td className="py-3 font-medium text-slate-700 dark:text-slate-350">{t('Advanced Analytics & Reports')}</td>
+                <td className="py-3 text-center text-slate-500 dark:text-slate-400">✕</td>
+                <td className="py-3 text-center text-slate-700 dark:text-slate-200">✓</td>
+                <td className="py-3 text-center text-slate-700 dark:text-slate-200">✓</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       {/* Payment History List */}
       <div className={`${glass.card} rounded-3xl p-5 sm:p-6 overflow-hidden`}>
         <div className="flex items-center justify-between gap-3 mb-4">
@@ -585,6 +808,94 @@ export default function SubscriptionPage() {
         )}
 
       </div>
+
+      {/* ── Payment Receipt Modal (Portaled) ── */}
+      {createPortal(
+        <AnimatePresence>
+          {paymentReceipt && (
+            <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setPaymentReceipt(null)}
+                className="absolute inset-0 bg-slate-900/60 dark:bg-black/85 backdrop-blur-md"
+              />
+              
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 15 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 15 }}
+                className="relative w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800/80 rounded-3xl p-6 shadow-2xl z-10 overflow-hidden text-center"
+              >
+                {/* Visual indicator header */}
+                <div className="mb-6">
+                  {paymentReceipt.status === 'success' ? (
+                    <div className="w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mx-auto mb-3 text-emerald-500 animate-bounce">
+                      <CheckCircle size={36} />
+                    </div>
+                  ) : (
+                    <div className="w-16 h-16 rounded-full bg-rose-500/10 border border-rose-500/20 flex items-center justify-center mx-auto mb-3 text-rose-500 animate-pulse">
+                      <AlertCircle size={36} />
+                    </div>
+                  )}
+                  <h3 className="text-xl font-black text-slate-900 dark:text-white">
+                    {paymentReceipt.status === 'success' ? t('Payment Successful!') : t('Payment Failed')}
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    {paymentReceipt.status === 'success' 
+                      ? t('Thank you! Your premium subscription is now active.') 
+                      : t('Your transaction could not be completed.')}
+                  </p>
+                </div>
+
+                {/* Receipt Details Card */}
+                <div className="bg-slate-50 dark:bg-white/[0.02] border border-slate-200/50 dark:border-white/5 rounded-2xl p-4 space-y-3 mb-6 text-xs text-left">
+                  <div className="flex justify-between items-center pb-2 border-b border-slate-200/50 dark:border-white/5">
+                    <span className="text-slate-400">{t('Product')}</span>
+                    <span className="font-bold text-slate-800 dark:text-slate-200">{t(paymentReceipt.planName)}</span>
+                  </div>
+                  <div className="flex justify-between items-center pb-2 border-b border-slate-200/50 dark:border-white/5">
+                    <span className="text-slate-400">{t('Paid Amount')}</span>
+                    <span className="font-extrabold text-primary-500 text-sm">₹{paymentReceipt.amount}</span>
+                  </div>
+                  {paymentReceipt.paymentId && (
+                    <div className="flex justify-between items-center pb-2 border-b border-slate-200/50 dark:border-white/5">
+                      <span className="text-slate-400">{t('Payment ID')}</span>
+                      <span className="font-mono text-[10px] font-bold text-slate-700 dark:text-slate-350">{paymentReceipt.paymentId}</span>
+                    </div>
+                  )}
+                  {paymentReceipt.orderId && (
+                    <div className="flex justify-between items-center pb-2 border-b border-slate-200/50 dark:border-white/5">
+                      <span className="text-slate-400">{t('Order ID')}</span>
+                      <span className="font-mono text-[10px] font-bold text-slate-700 dark:text-slate-350">{paymentReceipt.orderId}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between items-center pb-2 border-b border-slate-200/50 dark:border-white/5">
+                    <span className="text-slate-400">{t('Date & Time')}</span>
+                    <span className="font-bold text-slate-700 dark:text-slate-350">{paymentReceipt.date}</span>
+                  </div>
+                  {paymentReceipt.errorMessage && (
+                    <div className="pt-1 text-rose-500 font-semibold text-[10px] leading-relaxed">
+                      <span className="text-slate-400 block mb-0.5">{t('Reason for Failure:')}</span>
+                      {t(paymentReceipt.errorMessage)}
+                    </div>
+                  )}
+                </div>
+
+                {/* Close Button */}
+                <button
+                  onClick={() => setPaymentReceipt(null)}
+                  className="w-full py-3 rounded-2xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:opacity-90 active:scale-[0.98] font-bold text-xs transition-all shadow-md"
+                >
+                  {t('Close Receipt')}
+                </button>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
 
     </div>
   );

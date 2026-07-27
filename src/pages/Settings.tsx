@@ -840,7 +840,7 @@ export default function Settings() {
               {/* App version footer */}
               <div className="px-4 py-2.5 border-t border-black/[0.06] dark:border-white/[0.06] bg-black/[0.02] dark:bg-white/[0.02] flex items-center justify-between">
                 <span className="text-[12px] text-slate-400 dark:text-slate-500">{t('App Version')}</span>
-                <span className="text-[12px] font-mono text-slate-500 dark:text-slate-400">1.0.0</span>
+                <span className="text-[12px] font-mono text-slate-500 dark:text-slate-400">1.4.7</span>
               </div>
             </SettingCard>
           </motion.section>
@@ -1254,8 +1254,33 @@ export default function Settings() {
                 iconColor="#09b9fc"
                 title={t('App Information')}
                 subtitle={t('About, legal details, terms, privacy, and policies')}
-                last
                 onPress={() => navigate('app-info')}
+              >
+                <ChevronRight size={15} className="text-slate-400 dark:text-slate-600" />
+              </SettingRow>
+
+              <SettingRow
+                icon={Shield}
+                iconBg="rgba(16,185,129,0.12)"
+                iconColor="#10b981"
+                title={t('App Permissions')}
+                subtitle={t('Configure notifications, location, SMS and camera access')}
+                onPress={() => navigate('/permissions-gate')}
+              >
+                <ChevronRight size={15} className="text-slate-400 dark:text-slate-600" />
+              </SettingRow>
+
+              <SettingRow
+                icon={HelpCircle}
+                iconBg="rgba(99,102,241,0.12)"
+                iconColor="#6366f1"
+                title={t('Replay Onboarding')}
+                subtitle={t('View the animated introduction walkthrough screens again')}
+                last
+                onPress={() => {
+                  localStorage.removeItem('hasCompletedOnboarding');
+                  navigate('/onboarding');
+                }}
               >
                 <ChevronRight size={15} className="text-slate-400 dark:text-slate-600" />
               </SettingRow>

@@ -10,6 +10,8 @@ buildscript {
         classpath 'com.android.tools.build:gradle:8.13.0'
         classpath 'com.google.gms:google-services:4.4.4'
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:2.2.0"
+        // Compose Compiler plugin for Kotlin 2.0+
+        classpath "org.jetbrains.kotlin:compose-compiler-gradle-plugin:2.2.0"
         // KSP for Room annotation processing (replaces deprecated kapt)
         classpath "com.google.devtools.ksp:symbol-processing-gradle-plugin:2.2.0-2.0.2"
 
@@ -26,7 +28,7 @@ allprojects {
         mavenCentral()
     }
     configurations.all {
-        resolutionStrategy.eachDependency { DependencyResolveDetails details ->
+        resolutionStrategy.eachDependency { details ->
             if (details.requested.group == 'org.jetbrains.kotlin') {
                 details.useVersion '2.2.0'
             }

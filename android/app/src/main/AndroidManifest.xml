@@ -12,7 +12,26 @@
         android:usesCleartextTraffic="false"
         android:enableOnBackInvokedCallback="true"
         android:hardwareAccelerated="true"
-        tools:targetApi="34">
+        android:appCategory="social">
+        <!-- Application Category Metadata for Android Launchers - Lifestyle & Health -->
+        <!-- Primary: Android system category hint -->
+        <meta-data android:name="android.app.category" android:value="lifestyle" />
+        <meta-data android:name="category" android:value="Lifestyle" />
+        <!-- Samsung One UI launcher category -->
+        <meta-data android:name="com.samsung.android.launcher.category" android:value="Lifestyle" />
+        <!-- Xiaomi MIUI launcher category -->
+        <meta-data android:name="miui.category" android:value="lifestyle" />
+        <!-- OPPO/Realme/OnePlus (ColorOS) launcher category -->
+        <meta-data android:name="oppo.launcher.category" android:value="lifestyle" />
+        <!-- Huawei EMUI launcher category -->
+        <meta-data android:name="huawei.category" android:value="lifestyle" />
+        <!-- Google Play Store category hint -->
+        <meta-data android:name="com.google.android.apps.store.category" android:value="LIFESTYLE" />
+
+        <!-- Google AdMob App ID -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-6753181691071923~9884582073"/>
 
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
@@ -89,6 +108,71 @@
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="location" />
+
+        <!-- Financial Widget -->
+        <receiver
+            android:name=".FinancialWidgetReceiver"
+            android:label="@string/financial_widget_name"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/financial_widget_info" />
+        </receiver>
+
+        <!-- Bills Widget -->
+        <receiver
+            android:name=".BillsWidgetReceiver"
+            android:label="@string/bills_widget_name"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/bills_widget_info" />
+        </receiver>
+
+        <!-- Quick Actions Widget -->
+        <receiver
+            android:name=".QuickActionsWidgetReceiver"
+            android:label="@string/quick_actions_widget_name"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/quick_actions_widget_info" />
+        </receiver>
+
+        <!-- Budget Progress Widget -->
+        <receiver
+            android:name=".BudgetWidgetReceiver"
+            android:label="@string/budget_widget_name"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/budget_widget_info" />
+        </receiver>
+
+        <!-- Insights Widget -->
+        <receiver
+            android:name=".InsightsWidgetReceiver"
+            android:label="@string/insights_widget_name"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/insights_widget_info" />
+        </receiver>
     </application>
 
     <!-- Permissions -->

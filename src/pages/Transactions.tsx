@@ -38,10 +38,13 @@ import {
   AlertCircle,
   MessageSquareText,
   Smartphone,
+  FileText,
+  FileSpreadsheet,
 } from 'lucide-react';
 import AnimatedNumber from '../components/ui/AnimatedNumber';
 import { Transaction } from '../types/finance';
 import { staggerContainer, staggerItem, listItemVariants } from '../utils/animations';
+import { registerBackButtonHandler } from '../utils/backButtonManager';
 
 // ============================================================================
 // Custom Hooks
@@ -73,7 +76,7 @@ const useDebounce = <T,>(value: T, delay = 300): T => {
 interface ToastProps {
   message: string;
   visible: boolean;
-  icon?: React.ComponentType<{ size?: number; className?: string }> | null;
+  icon?: any;
   type?: 'success' | 'error' | 'info';
 }
 
@@ -329,29 +332,67 @@ export default function Transactions() {
   const [lightboxImg, setLightboxImg] = useState<string | null>(null);
   const [sourceFilter, setSourceFilter] = useState<string>('all'); // 'all' | 'manual' | 'sms'
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [exportFormat, setExportFormat] = useState<'pdf' | 'excel'>('pdf');
   const [exportRange, setExportRange] = useState({
     from: new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0],
     to: new Date().toISOString().split('T')[0],
   });
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+
+  useEffect(() => {
+    if (isExportModalOpen) {
+      return registerBackButtonHandler('transactions_export_modal', 100, () => {
+        setIsExportModalOpen(false);
+        return true;
+      });
+    }
+  }, [isExportModalOpen]);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [transactionToDelete, setTransactionToDelete] = useState<string | null>(null);
 
   const [toast, setToast] = useState<{
     message: string;
     visible: boolean;
-    icon: React.ComponentType<{ size?: number; className?: string }> | null;
+    icon: any;
     type: 'success' | 'error' | 'info';
   }>({ message: '', visible: false, icon: null, type: 'success' });
 
   const showToast = useCallback((
     msg: string,
     type: 'success' | 'error' | 'info' = 'success',
-    icon: React.ComponentType<{ size?: number; className?: string }> | null = null
+    icon: any = null
   ) => {
     setToast({ message: msg, visible: true, icon, type });
     setTimeout(() => setToast({ message: '', visible: false, icon: null, type: 'success' }), 2500);
   }, []);
+
+  // Approve low confidence SMS transaction handler
+  const approveSmsTransaction = useCallback(async (txId: string) => {
+    try {
+      const { error } = await supabase
+        .from('transactions')
+        .update({ sms_confidence: 1.0 })
+        .eq('id', txId);
+
+      if (!error) {
+        showToast(t('SMS transaction verified & approved!'), 'success', CheckCircle2);
+        refetch();
+      } else {
+        showToast(t('Failed to approve transaction'), 'error');
+      }
+    } catch {
+      showToast(t('Error approving transaction'), 'error');
+    }
+  }, [refetch, showToast, t]);
+
+  // Count unreviewed low-confidence SMS (< 75% confidence)
+  const unreviewedSmsCount = useMemo(() => {
+    return transactions.filter(tx => 
+      (tx.source === 'sms' || tx.smsConfidence !== null) && 
+      Number(tx.smsConfidence || 0) < 0.75 && 
+      Number(tx.smsConfidence || 0) !== 1.0
+    ).length;
+  }, [transactions]);
 
   // Process transactions (deduplicate + filter + sort)
   const processedTransactions = useMemo(() => {
@@ -377,7 +418,17 @@ export default function Transactions() {
     if (categoryFilter !== 'all') filtered = filtered.filter((tx) => tx.category === categoryFilter);
     if (dateRange.from) filtered = filtered.filter((tx) => tx.date >= dateRange.from);
     if (dateRange.to) filtered = filtered.filter((tx) => tx.date <= dateRange.to);
-    if (sourceFilter !== 'all') filtered = filtered.filter((tx) => (tx.source || 'manual') === sourceFilter);
+
+    // Source filter (including low-confidence review filter)
+    if (sourceFilter === 'needs-review') {
+      filtered = filtered.filter((tx) => 
+        (tx.source === 'sms' || tx.smsConfidence !== null) && 
+        Number(tx.smsConfidence || 0) < 0.75 && 
+        Number(tx.smsConfidence || 0) !== 1.0
+      );
+    } else if (sourceFilter !== 'all') {
+      filtered = filtered.filter((tx) => (tx.source || 'manual') === sourceFilter);
+    }
 
     // Sort with null-safe date handling
     filtered.sort((a, b) => {
@@ -527,7 +578,11 @@ export default function Transactions() {
     if (sortBy !== 'date-desc') filters.push({ type: 'sort', label: `Sort: ${sortBy.replace('-', ' ')}`, value: sortBy });
     if (dateRange.from) filters.push({ type: 'date', label: `From: ${dateRange.from}`, value: 'date-from' });
     if (dateRange.to) filters.push({ type: 'date', label: `To: ${dateRange.to}`, value: 'date-to' });
-    if (sourceFilter !== 'all') filters.push({ type: 'source', label: `Source: ${sourceFilter.toUpperCase()}`, value: sourceFilter });
+    if (sourceFilter === 'needs-review') {
+      filters.push({ type: 'source', label: `Review SMS (<75%)`, value: 'needs-review' });
+    } else if (sourceFilter !== 'all') {
+      filters.push({ type: 'source', label: `Source: ${sourceFilter.toUpperCase()}`, value: sourceFilter });
+    }
     return filters;
   }, [typeFilter, categoryFilter, sortBy, dateRange, sourceFilter]);
 
@@ -546,7 +601,7 @@ export default function Transactions() {
     else if (value === sortBy) setSortBy('date-desc');
     else if (value === 'date-from') setDateRange((p) => ({ ...p, from: '' }));
     else if (value === 'date-to') setDateRange((p) => ({ ...p, to: '' }));
-    else if (value === 'sms' || value === 'manual' || value === sourceFilter) setSourceFilter('all');
+    else if (value === 'sms' || value === 'manual' || value === 'needs-review' || value === sourceFilter) setSourceFilter('all');
   };
 
   // Delete handlers
@@ -670,6 +725,7 @@ export default function Transactions() {
       const pdfDataUri = doc.output('datauristring');
       await downloadBase64File(pdfDataUri, `Transaction_History_${exportRange.from}_to_${exportRange.to}.pdf`);
       showToast(t('PDF Generated Successfully'));
+      setIsExportModalOpen(false);
     } catch (err) {
       console.error('PDF Error:', err);
       showToast(t('Failed to generate PDF'), 'error');
@@ -678,6 +734,92 @@ export default function Transactions() {
       setIsExportModalOpen(false);
     }
   }, [exportRange, transactions, t, showToast]);
+
+  // Export Excel (.csv sheet format)
+  const generateExcel = useCallback(async () => {
+    if (!exportRange.from || !exportRange.to) {
+      showToast(t('Please select both From and To dates'), 'error');
+      return;
+    }
+    setIsGeneratingPDF(true);
+    try {
+      const fromDate = new Date(exportRange.from);
+      fromDate.setHours(0, 0, 0, 0);
+      const toDate = new Date(exportRange.to);
+      toDate.setHours(23, 59, 59, 999);
+      const filtered = transactions.filter((tx) => {
+        if (!tx.date) return false;
+        const tDate = new Date(tx.date);
+        return tDate >= fromDate && tDate <= toDate;
+      });
+      if (filtered.length === 0) {
+        showToast(t('No transactions found in this date range'), 'error');
+        return;
+      }
+      filtered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+      const formatDateForExcel = (dStr: string) => {
+        if (!dStr) return '';
+        const parts = dStr.split('-');
+        if (parts.length === 3) {
+          const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+          const mIndex = parseInt(parts[1], 10) - 1;
+          if (mIndex >= 0 && mIndex < 12) {
+            return `${parts[2]} ${months[mIndex]} ${parts[0]}`;
+          }
+        }
+        return dStr;
+      };
+
+      // Format CSV for Excel with UTF-8 BOM
+      const headers = ['Date', 'Category', 'Description / Merchant', 'Type', 'Amount (INR)', 'Member', 'Source', 'Transaction Notes'];
+      const rows = filtered.map(tx => {
+        const formattedDate = formatDateForExcel(tx.date);
+        const category = (tx.category || '').replace(/"/g, '""');
+        const merchant = (tx.merchantName || (tx.notes ? tx.notes.split('\n')[0] : '') || tx.category || '').replace(/[\r\n]+/g, ' ').trim().replace(/"/g, '""');
+        const type = (tx.type || '').toUpperCase();
+        const amount = tx.type === 'income' ? Number(tx.amount) : -Number(tx.amount);
+        const member = (tx.memberName || '').replace(/"/g, '""');
+        const source = (tx.source || 'manual').toUpperCase();
+        const notes = (tx.notes || '').replace(/[\r\n]+/g, ' -- ').trim().replace(/"/g, '""');
+
+        return [
+          `"${formattedDate}"`,
+          `"${category}"`,
+          `"${merchant}"`,
+          `"${type}"`,
+          amount,
+          `"${member}"`,
+          `"${source}"`,
+          `"${notes}"`
+        ];
+      });
+
+      const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+      const base64Data = btoa(unescape(encodeURIComponent(csvContent)));
+      const fileName = `MS_Family_Transactions_${exportRange.from}_to_${exportRange.to}.csv`;
+
+      // Close modal before download trigger to avoid backdrop pointer lock
+      setIsExportModalOpen(false);
+
+      const downloadResult = await downloadBase64File(
+        base64Data,
+        fileName,
+        'text/csv;charset=utf-8;'
+      );
+
+      if (downloadResult.success) {
+        showToast(t('Excel statement downloaded successfully'));
+      } else {
+        showToast(t('Download failed: ') + downloadResult.message, 'error');
+      }
+    } catch (err: any) {
+      showToast(t('Error exporting Excel statement: ') + err.message, 'error');
+    } finally {
+      setIsGeneratingPDF(false);
+      setIsExportModalOpen(false);
+    }
+  }, [exportRange, transactions, showToast, t]);
 
   const hasActiveFilters = activeFilters.length > 0 || searchQuery;
 
@@ -708,6 +850,7 @@ export default function Transactions() {
               )}
             </button>
             <button
+              type="button"
               onClick={() => {
                 if (!isPremium) {
                   setShowUpgradeModal(true);
@@ -715,12 +858,12 @@ export default function Transactions() {
                   setIsExportModalOpen(true);
                 }
               }}
-              aria-label="Export PDF"
-              className="glass-btn relative w-10 h-10 rounded-[12px] flex items-center justify-center text-slate-600 dark:text-slate-300 disabled:opacity-40"
+              aria-label="Export Statement"
+              className="relative w-10 h-10 rounded-[14px] flex items-center justify-center bg-gradient-to-r from-primary-500/25 via-purple-500/20 to-indigo-500/25 dark:from-primary-500/35 dark:via-purple-600/30 dark:to-indigo-600/35 backdrop-blur-xl border border-primary-400/40 dark:border-primary-400/50 text-primary-600 dark:text-primary-300 shadow-[0_2px_16px_rgba(124,58,237,0.3)] hover:shadow-[0_4px_24px_rgba(124,58,237,0.45)] hover:scale-[1.03] active:scale-95 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary-500/50 disabled:opacity-40"
               disabled={processedTransactions.length === 0}
             >
-              <span className="absolute top-0 left-2 right-2 h-px bg-gradient-to-r from-transparent via-white/60 dark:via-white/15 to-transparent pointer-events-none" />
-              <Download size={17} strokeWidth={2.3} />
+              <span className="absolute top-0 left-2 right-2 h-px bg-gradient-to-r from-transparent via-white/80 dark:via-white/40 to-transparent pointer-events-none" />
+              <Download size={18} strokeWidth={2.4} className="text-primary-500 dark:text-primary-300 drop-shadow-[0_1px_4px_rgba(124,58,237,0.4)]" />
             </button>
           </div>,
           document.getElementById('header-actions-portal') as HTMLElement
@@ -881,23 +1024,37 @@ export default function Transactions() {
 
                   {/* Source Filter */}
                   <div>
-                    <label className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest mb-2 block">
-                      {t('Source')}
+                    <label className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest mb-2 flex items-center justify-between">
+                      <span>{t('Source')}</span>
+                      {unreviewedSmsCount > 0 && (
+                        <span className="text-[10px] font-extrabold text-amber-500 flex items-center gap-1">
+                          <AlertCircle size={10} />
+                          {unreviewedSmsCount} Need Review
+                        </span>
+                      )}
                     </label>
-                    <div className="flex p-1 bg-black/5 dark:bg-black/40 border border-slate-200/30 dark:border-white/5 rounded-xl gap-1 backdrop-blur-sm">
-                      {['all', 'manual', 'sms'].map((s) => (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 p-1 bg-black/5 dark:bg-black/40 border border-slate-200/30 dark:border-white/5 rounded-xl gap-1 backdrop-blur-sm">
+                      {[
+                        { id: 'all', label: 'All' },
+                        { id: 'manual', label: 'Manual' },
+                        { id: 'sms', label: 'SMS' },
+                        { id: 'needs-review', label: `Review (${unreviewedSmsCount})` }
+                      ].map((s) => (
                         <button
-                          key={s}
-                          onClick={() => setSourceFilter(s)}
-                          className={`flex-1 py-2.5 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${sourceFilter === s
-                            ? s === 'sms'
-                              ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-sm'
-                              : 'bg-white dark:bg-slate-800 shadow-sm text-slate-900 dark:text-white'
+                          key={s.id}
+                          onClick={() => setSourceFilter(s.id)}
+                          className={`py-2 text-[11px] font-bold rounded-lg transition-all flex items-center justify-center gap-1 ${sourceFilter === s.id
+                            ? s.id === 'needs-review'
+                              ? 'bg-amber-500 text-white shadow-sm'
+                              : s.id === 'sms'
+                                ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-sm'
+                                : 'bg-white dark:bg-slate-800 shadow-sm text-slate-900 dark:text-white'
                             : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
                             }`}
                         >
-                          {s === 'sms' && <Smartphone size={12} />}
-                          {s === 'all' ? 'All' : s === 'manual' ? 'Manual' : 'SMS'}
+                          {s.id === 'sms' && <Smartphone size={12} />}
+                          {s.id === 'needs-review' && <AlertCircle size={12} />}
+                          {s.label}
                         </button>
                       ))}
                     </div>
@@ -1001,6 +1158,37 @@ export default function Transactions() {
         </div>
       )}
 
+      {/* SMS Review Alert Banner if any SMS has confidence < 0.75 */}
+      {unreviewedSmsCount > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-500/15 border border-amber-500/30 shadow-lg backdrop-blur-md flex flex-wrap items-center justify-between gap-3 mb-4"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-500 flex items-center justify-center shrink-0">
+              <AlertCircle size={20} />
+            </div>
+            <div>
+              <h4 className="text-sm font-black text-amber-700 dark:text-amber-300">
+                {unreviewedSmsCount} Automated SMS Parsed Below 75% Confidence
+              </h4>
+              <p className="text-xs text-amber-600/80 dark:text-amber-400/80 font-medium">
+                Review amount, category, and merchant details before approving into your balance.
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => setSourceFilter('needs-review')}
+            className="px-3.5 py-1.5 text-xs font-bold rounded-xl bg-amber-500 text-white shadow-md hover:bg-amber-600 transition-colors flex items-center gap-1.5 shrink-0"
+          >
+            <Filter size={14} />
+            Filter Low-Confidence SMS ({unreviewedSmsCount})
+          </button>
+        </motion.div>
+      )}
+
       {/* Transaction List / Grid */}
       <motion.div variants={item} className="apple-glass-card overflow-hidden">
         {/* Desktop Table Header */}
@@ -1047,7 +1235,9 @@ export default function Transactions() {
                     {group.dateLabel}
                   </div>
                   {group.transactions.map((tx) => {
-                    const isSms = tx.source === 'sms';
+                    const isSms = tx.source === 'sms' || tx.smsConfidence !== null;
+                    const confidenceVal = Number(tx.smsConfidence ?? 1.0);
+                    const isNeedsReview = isSms && confidenceVal < 0.75 && confidenceVal !== 1.0;
                     return (
                       <motion.div
                         key={tx.id}
@@ -1055,14 +1245,16 @@ export default function Transactions() {
                         initial="hidden"
                         animate="visible"
                         exit="exit"
-                        className={`flex flex-col sm:grid sm:grid-cols-12 gap-1 sm:gap-3 px-4 sm:px-5 py-3.5 sm:py-4 border-b border-slate-200/20 dark:border-white/5 last:border-0 relative row-contain apple-glass-row ${isSms
-                          ? 'bg-gradient-to-r from-cyan-500/5 via-blue-500/5 to-transparent dark:from-cyan-500/5 dark:via-blue-500/5 dark:to-transparent border-l-2 border-l-cyan-500'
-                          : ''
+                        className={`flex flex-col sm:grid sm:grid-cols-12 gap-1 sm:gap-3 px-4 sm:px-5 py-3.5 sm:py-4 border-b border-slate-200/20 dark:border-white/5 last:border-0 relative row-contain apple-glass-row ${isNeedsReview
+                          ? 'bg-amber-500/10 dark:bg-amber-500/10 border-l-4 border-l-amber-500'
+                          : isSms
+                            ? 'bg-gradient-to-r from-cyan-500/5 via-blue-500/5 to-transparent dark:from-cyan-500/5 dark:via-blue-500/5 dark:to-transparent border-l-2 border-l-cyan-500'
+                            : ''
                           }`}
                         onClick={() => setSelectedTx(tx)}
                       >
                         {/* SMS indicator left bar */}
-                        {isSms && (
+                        {isSms && !isNeedsReview && (
                           <div className="absolute left-0 top-2 bottom-2 w-[3px] rounded-r-full bg-gradient-to-b from-cyan-400 to-blue-500" />
                         )}
 
@@ -1071,14 +1263,18 @@ export default function Transactions() {
                           <div className="flex items-center gap-3 w-full">
                             <div className="relative">
                               <div
-                                className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 backdrop-blur-sm border shadow-sm ${isSms
-                                  ? 'bg-gradient-to-br from-cyan-500/10 to-blue-500/10 border-cyan-500/20 text-cyan-600 dark:text-cyan-400'
-                                  : tx.type === 'income'
-                                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400'
-                                    : 'bg-rose-500/10 border-rose-500/20 text-rose-600 dark:text-rose-400'
+                                className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 backdrop-blur-sm border shadow-sm ${isNeedsReview
+                                  ? 'bg-amber-500/20 border-amber-500/40 text-amber-500'
+                                  : isSms
+                                    ? 'bg-gradient-to-br from-cyan-500/10 to-blue-500/10 border-cyan-500/20 text-cyan-600 dark:text-cyan-400'
+                                    : tx.type === 'income'
+                                      ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+                                      : 'bg-rose-500/10 border-rose-500/20 text-rose-600 dark:text-rose-400'
                                   }`}
                               >
-                                {isSms ? (
+                                {isNeedsReview ? (
+                                  <AlertCircle size={18} className="text-amber-500" />
+                                ) : isSms ? (
                                   <MessageSquareText size={18} />
                                 ) : tx.type === 'income' ? (
                                   <ArrowUpRight size={18} />
@@ -1096,7 +1292,11 @@ export default function Transactions() {
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-1.5">
                                 <p className="font-semibold text-sm text-slate-800 dark:text-slate-200 truncate">{t(tx.category)}</p>
-                                {isSms && (
+                                {isNeedsReview ? (
+                                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider rounded-full bg-amber-500 text-white shadow-sm shrink-0">
+                                    Needs Review
+                                  </span>
+                                ) : isSms && (
                                   <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-sm shrink-0">
                                     SMS
                                   </span>
@@ -1197,6 +1397,42 @@ export default function Transactions() {
                             )}
                           </button>
                         </div>
+
+                        {/* Low Confidence Review Action Bar */}
+                        {isNeedsReview && (
+                          <div
+                            className="col-span-12 mt-2 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 flex flex-wrap items-center justify-between gap-2 z-10"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <div className="flex items-center gap-1.5 text-xs font-bold text-amber-600 dark:text-amber-400">
+                              <AlertCircle size={14} className="text-amber-500 shrink-0" />
+                              <span>Automated SMS low confidence ({(confidenceVal * 100).toFixed(0)}% Accuracy)</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 ml-auto">
+                              <button
+                                onClick={() => approveSmsTransaction(tx.id)}
+                                className="px-2.5 py-1 text-[10px] font-bold rounded-lg bg-emerald-500 text-white shadow-sm hover:bg-emerald-600 transition-colors flex items-center gap-1"
+                              >
+                                <CheckCircle2 size={12} />
+                                {t('Approve')}
+                              </button>
+                              <button
+                                onClick={() => navigate(`/edit-transaction/${tx.id}`, { state: tx })}
+                                className="px-2.5 py-1 text-[10px] font-bold rounded-lg bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30 hover:bg-amber-500/30 transition-colors flex items-center gap-1"
+                              >
+                                <Pencil size={12} />
+                                {t('Edit')}
+                              </button>
+                              <button
+                                onClick={() => handleSingleDelete(tx.id)}
+                                className="px-2.5 py-1 text-[10px] font-bold rounded-lg bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 hover:bg-rose-500/20 transition-colors flex items-center gap-1"
+                              >
+                                <Trash2 size={12} />
+                                {t('Reject')}
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </motion.div>
                     );
                   })}
@@ -1448,7 +1684,7 @@ export default function Transactions() {
         document.body
       )}
 
-      {/* Export Modal */}
+      {/* Export Modal - Apple Vision OS Glass UI */}
       {createPortal(
         <AnimatePresence>
           {isExportModalOpen && (
@@ -1456,73 +1692,184 @@ export default function Transactions() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[60] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4"
+              className="fixed inset-0 z-[60] bg-slate-950/60 backdrop-blur-md flex items-center justify-center p-4"
               onClick={() => setIsExportModalOpen(false)}
             >
               <motion.div
-                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                initial={{ opacity: 0, scale: 0.92, y: 20 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                className="apple-glass-modal w-full max-w-sm p-6 relative overflow-hidden"
+                exit={{ opacity: 0, scale: 0.92, y: 20 }}
+                className="w-full max-w-sm p-6 relative rounded-3xl overflow-hidden bg-white/80 dark:bg-[#12121f]/80 backdrop-blur-2xl border border-white/60 dark:border-white/15 shadow-[0_20px_60px_rgba(0,0,0,0.35),0_0_30px_rgba(124,58,237,0.15)]"
                 onClick={(e) => e.stopPropagation()}
               >
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center gap-2">
-                    <div className="p-2 rounded-xl bg-primary-50 dark:bg-primary-950/40 text-primary-500">
-                      <Download size={20} />
+                {/* Top Specular Highlight Streak */}
+                <span className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/90 dark:via-white/30 to-transparent pointer-events-none" />
+
+                <div className="flex items-center justify-between mb-5">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2.5 rounded-2xl bg-gradient-to-br from-primary-500/20 to-purple-500/20 border border-primary-500/30 text-primary-500 dark:text-primary-300 shadow-inner">
+                      <Download size={20} strokeWidth={2.4} />
                     </div>
-                    <h3 className="text-lg font-bold text-slate-900 dark:text-white">{t('Export History')}</h3>
+                    <h3 className="text-xl font-extrabold text-slate-900 dark:text-white tracking-tight">{t('Export History')}</h3>
                   </div>
                   <button
                     onClick={() => setIsExportModalOpen(false)}
-                    className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 dark:text-slate-500"
+                    className="p-2 rounded-xl bg-slate-100/80 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/15 text-slate-500 dark:text-slate-400 transition-colors backdrop-blur-md border border-slate-200/50 dark:border-white/10"
                     aria-label="Close export modal"
                   >
-                    <X size={20} />
+                    <X size={18} />
                   </button>
                 </div>
+
                 <div className="space-y-4">
+                  {/* Export Format Segmented Glass Toggle with Smooth Sliding Animation */}
                   <div>
-                    <label className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest mb-1.5 block">
+                    <label className="text-[10px] text-slate-500 dark:text-slate-400 font-extrabold uppercase tracking-widest mb-2 block">
+                      {t('Export Format')}
+                    </label>
+                    <div className="grid grid-cols-2 gap-1 bg-slate-200/60 dark:bg-black/40 backdrop-blur-xl p-1 rounded-2xl border border-slate-300/40 dark:border-white/10 shadow-inner relative overflow-hidden">
+                      <button
+                        type="button"
+                        onClick={() => setExportFormat('pdf')}
+                        className={`relative flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs font-bold transition-colors duration-200 z-10 ${
+                          exportFormat === 'pdf' ? 'text-white' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+                        }`}
+                      >
+                        {exportFormat === 'pdf' && (
+                          <motion.div
+                            layoutId="activeExportFormatPill"
+                            className="absolute inset-0 rounded-xl bg-gradient-to-r from-primary-600 to-purple-600 shadow-[0_4px_16px_rgba(124,58,237,0.35)] border border-white/20 -z-10"
+                            transition={{ type: 'spring', stiffness: 450, damping: 32 }}
+                          />
+                        )}
+                        <FileText size={16} />
+                        PDF Report
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setExportFormat('excel')}
+                        className={`relative flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs font-bold transition-colors duration-200 z-10 ${
+                          exportFormat === 'excel' ? 'text-white' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+                        }`}
+                      >
+                        {exportFormat === 'excel' && (
+                          <motion.div
+                            layoutId="activeExportFormatPill"
+                            className="absolute inset-0 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 shadow-[0_4px_16px_rgba(16,185,129,0.35)] border border-white/20 -z-10"
+                            transition={{ type: 'spring', stiffness: 450, damping: 32 }}
+                          />
+                        )}
+                        <FileSpreadsheet size={16} />
+                        Excel Sheet
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Quick Date Presets Glass Pills with Smooth Motion Sliding */}
+                  <div>
+                    <label className="text-[10px] text-slate-500 dark:text-slate-400 font-extrabold uppercase tracking-widest mb-2 block">
+                      {t('Date Presets')}
+                    </label>
+                    <div className="flex flex-wrap gap-1.5 relative">
+                      {[
+                        { label: t('Today'), days: 0 },
+                        { label: t('Last 7 Days'), days: 6 },
+                        { label: t('Last 30 Days'), days: 29 },
+                        { label: t('This Month'), type: 'month' },
+                      ].map((preset) => {
+                        const now = new Date();
+                        const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+                        let fromStr = todayStr;
+
+                        if (preset.type === 'month') {
+                          fromStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+                        } else if (preset.days) {
+                          const pastDate = new Date(now);
+                          pastDate.setDate(now.getDate() - preset.days);
+                          fromStr = `${pastDate.getFullYear()}-${String(pastDate.getMonth() + 1).padStart(2, '0')}-${String(pastDate.getDate()).padStart(2, '0')}`;
+                        }
+
+                        const isSelected = exportRange.from === fromStr && exportRange.to === todayStr;
+
+                        return (
+                          <button
+                            key={preset.label}
+                            type="button"
+                            onClick={() => setExportRange({ from: fromStr, to: todayStr })}
+                            className={`relative px-3.5 py-1.5 rounded-full text-xs font-bold transition-colors duration-200 z-10 ${
+                              isSelected
+                                ? 'text-white'
+                                : 'bg-white/40 dark:bg-white/5 text-slate-700 dark:text-slate-300 border border-white/40 dark:border-white/10 hover:border-primary-400/50 hover:bg-white/70 dark:hover:bg-white/10 backdrop-blur-md shadow-sm'
+                            }`}
+                          >
+                            {isSelected && (
+                              <motion.div
+                                layoutId="activePresetPill"
+                                className="absolute inset-0 rounded-full bg-gradient-to-r from-primary-500 to-purple-600 border border-primary-400/40 shadow-[0_4px_16px_rgba(124,58,237,0.35)] -z-10"
+                                transition={{ type: 'spring', stiffness: 450, damping: 32 }}
+                              />
+                            )}
+                            <span className="relative z-10">{preset.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Glass Date Range Inputs */}
+                  <div>
+                    <label className="text-[10px] text-slate-500 dark:text-slate-400 font-extrabold uppercase tracking-widest mb-1.5 block">
                       {t('From Date')}
                     </label>
                     <div className="relative">
-                      <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                      <Calendar className="absolute left-3.5 top-1/2 -translate-y-1/2 text-primary-500/70 dark:text-primary-400/70" size={16} />
                       <input
                         type="date"
                         value={exportRange.from}
                         onChange={(e) => setExportRange((r) => ({ ...r, from: e.target.value }))}
-                        className="apple-glass-input !pl-10 !py-2.5 text-sm"
+                        className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-white/40 dark:bg-white/5 backdrop-blur-md border border-slate-200/60 dark:border-white/10 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none focus:border-primary-500/60 focus:ring-2 focus:ring-primary-500/20 shadow-inner transition-all"
                       />
                     </div>
                   </div>
                   <div>
-                    <label className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest mb-1.5 block">
+                    <label className="text-[10px] text-slate-500 dark:text-slate-400 font-extrabold uppercase tracking-widest mb-1.5 block">
                       {t('To Date')}
                     </label>
                     <div className="relative">
-                      <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                      <Calendar className="absolute left-3.5 top-1/2 -translate-y-1/2 text-primary-500/70 dark:text-primary-400/70" size={16} />
                       <input
                         type="date"
                         value={exportRange.to}
                         onChange={(e) => setExportRange((r) => ({ ...r, to: e.target.value }))}
-                        className="apple-glass-input !pl-10 !py-2.5 text-sm"
+                        className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-white/40 dark:bg-white/5 backdrop-blur-md border border-slate-200/60 dark:border-white/10 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none focus:border-primary-500/60 focus:ring-2 focus:ring-primary-500/20 shadow-inner transition-all"
                       />
                     </div>
                   </div>
-                  <div className="pt-4">
+
+                  {/* Primary Action Glass Button */}
+                  <div className="pt-3">
                     <button
-                      onClick={generatePDF}
+                      type="button"
+                      onClick={exportFormat === 'pdf' ? generatePDF : generateExcel}
                       disabled={isGeneratingPDF}
-                      className="w-full btn-primary !py-3 flex items-center justify-center gap-2 shadow-lg shadow-primary-500/20 active:scale-95 transition-all"
+                      className={`relative w-full py-3.5 rounded-2xl text-white font-extrabold text-sm shadow-[0_8px_25px_rgba(124,58,237,0.35)] hover:shadow-[0_12px_35px_rgba(124,58,237,0.5)] active:scale-95 transition-all duration-200 flex items-center justify-center gap-2 overflow-hidden border border-white/20 ${
+                        exportFormat === 'excel'
+                          ? 'bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 shadow-emerald-500/25'
+                          : 'bg-gradient-to-r from-primary-600 via-purple-600 to-indigo-600 shadow-primary-500/25'
+                      }`}
                     >
+                      <span className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/80 to-transparent pointer-events-none" />
                       {isGeneratingPDF ? (
                         <>
                           <Loader2 size={18} className="animate-spin" /> Generating Statement...
                         </>
+                      ) : exportFormat === 'excel' ? (
+                        <>
+                          <FileSpreadsheet size={18} strokeWidth={2.4} /> Download Excel Sheet
+                        </>
                       ) : (
                         <>
-                          <Download size={18} /> Download PDF Report
+                          <Download size={18} strokeWidth={2.4} /> Download PDF Report
                         </>
                       )}
                     </button>

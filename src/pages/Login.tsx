@@ -431,6 +431,14 @@ export default function Login() {
     }
   }, [user, navigate, isRecoveryMode]);
 
+  // Redirect to Onboarding if first launch and not completed
+  useEffect(() => {
+    const completed = localStorage.getItem('hasCompletedOnboarding') === 'true';
+    if (!completed) {
+      navigate('/onboarding', { replace: true });
+    }
+  }, [navigate]);
+
   // Load saved email
   useEffect(() => {
     const savedEmail = localStorage.getItem('rememberedEmail');
@@ -501,8 +509,11 @@ export default function Login() {
         options: {
           redirectTo,
           skipBrowserRedirect: isNative,
-          queryParams: {
+          queryParams: isNative ? {
             client_id: '476989919442-1tbtgjdc6fknvrsujhf9dgbfuq2ga3tk.apps.googleusercontent.com',
+            access_type: 'offline',
+            prompt: 'consent'
+          } : {
             access_type: 'offline',
             prompt: 'consent'
           }

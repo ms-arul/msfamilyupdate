@@ -41,6 +41,7 @@ import {
 } from 'recharts';
 import { SafeChartContainer } from '../components/ui/SafeChartContainer';
 import { PROVERBS } from '../utils/proverbs';
+import { AdMobBanner } from '../components/AdMobBanner';
 
 // Dashboard-local glass styles are now in index.css for better performance
 
@@ -147,11 +148,12 @@ interface BalanceHeroCardProps {
   t: (key: string) => string;
   balanceFilter: string;
   onFilterChange: (filter: string) => void;
+  streakCount?: number;
 }
 
 const BALANCE_FILTERS = ['Today', 'Yesterday', 'This Month', 'Last Month'];
 
-const BalanceHeroCard: React.FC<BalanceHeroCardProps> = React.memo(({ balance, income, expense, received, t, balanceFilter, onFilterChange }) => (
+const BalanceHeroCard: React.FC<BalanceHeroCardProps> = React.memo(({ balance, income, expense, received, t, balanceFilter, onFilterChange, streakCount = 1 }) => (
   <motion.div variants={item} className="g-panel overflow-hidden">
     {/* Gradient wash */}
     <div className="absolute inset-0 bg-gradient-to-br from-primary-500/6 via-transparent to-secondary-500/6 pointer-events-none dark:hidden" />
@@ -159,13 +161,23 @@ const BalanceHeroCard: React.FC<BalanceHeroCardProps> = React.memo(({ balance, i
     <div className="absolute -right-12 -bottom-12 w-48 h-48 rounded-full bg-primary-500/8 blur-3xl pointer-events-none dark:hidden" />
 
     <div className="relative z-10 p-4 sm:p-6">
-      {/* Label row */}
+      {/* Label row with Streak Badge replacing the top right wallet icon */}
       <div className="flex items-center justify-between mb-1">
         <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold tracking-widest uppercase">
           {t('Net Balance')}
         </p>
-        <div className="g-icon-bubble w-8 h-8 rounded-[10px] bg-primary-500/12 flex items-center justify-center">
-          <Wallet size={14} className="text-primary-500" />
+        <div
+          className="h-7 px-2.5 rounded-[10px] bg-gradient-to-r from-amber-500/15 via-orange-500/12 to-amber-500/15 border border-amber-500/30 dark:border-amber-400/25 shadow-sm inline-flex items-center justify-center gap-1.5 shrink-0 select-none"
+          title={`${streakCount} Days Streak`}
+        >
+          <img
+            src="/icons/streak.png"
+            alt="Streak"
+            className="w-4 h-4 object-contain shrink-0"
+          />
+          <span className="text-xs font-extrabold text-amber-500 dark:text-amber-400 leading-none tracking-tight flex items-center">
+            {streakCount}
+          </span>
         </div>
       </div>
 
@@ -174,8 +186,8 @@ const BalanceHeroCard: React.FC<BalanceHeroCardProps> = React.memo(({ balance, i
         <AnimatedNumber value={balance} prefix="₹" />
       </h2>
 
-      {/* Filter Tabs with animated indicator */}
-      <div className="g-filter-track flex items-center gap-0.5 mb-4 w-max">
+      {/* Filter Tabs */}
+      <div className="g-filter-track flex items-center gap-0.5 mb-4 w-max overflow-x-auto custom-scrollbar">
         {BALANCE_FILTERS.map(f => (
           <button
             key={f}
@@ -338,6 +350,15 @@ const SavingsGlance: React.FC<SavingsGlanceProps> = React.memo(({ t, navigate })
       }
     };
     loadData();
+
+    const handleAuthRefreshed = () => {
+      console.log('[SavingsGlance] Auth session refreshed event received. Re-fetching assets...');
+      loadData();
+    };
+    window.addEventListener('msfamily_auth_refreshed', handleAuthRefreshed);
+    return () => {
+      window.removeEventListener('msfamily_auth_refreshed', handleAuthRefreshed);
+    };
   }, [user]);
 
   const totalMetrics = useMemo(() => {
@@ -531,7 +552,7 @@ const TypingGreeting: React.FC<TypingGreetingProps> = React.memo(({ prefix, name
 
   useEffect(() => {
     setDisplayedLength(0);
-    
+
     let index = 0;
     const interval = setInterval(() => {
       index += 1;
@@ -754,19 +775,33 @@ export default function Dashboard() {
     let filtered: typeof allPersonalTransactions;
 
     if (balanceFilter === 'Today') {
-      filtered = allPersonalTransactions.filter(tx => tx.date === todayStr);
+      filtered = allPersonalTransactions.filter(tx => tx.date && String(tx.date).split('T')[0] === todayStr);
     } else if (balanceFilter === 'Yesterday') {
       const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-      const yesterdayStr = yesterday.toISOString().split('T')[0];
-      filtered = allPersonalTransactions.filter(tx => tx.date === yesterdayStr);
+      const yesterdayStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
+      filtered = allPersonalTransactions.filter(tx => tx.date && String(tx.date).split('T')[0] === yesterdayStr);
     } else if (balanceFilter === 'Last Month') {
       filtered = allPersonalTransactions.filter(tx => {
+        if (!tx.date) return false;
+        const parts = String(tx.date).split('T')[0].split('-');
+        if (parts.length === 3) {
+          const y = parseInt(parts[0], 10);
+          const m = parseInt(parts[1], 10) - 1;
+          return m === lastMonth && y === lastMonthYear;
+        }
         const d = new Date(tx.date);
         return d.getMonth() === lastMonth && d.getFullYear() === lastMonthYear;
       });
     } else {
       // 'This Month' (default)
       filtered = allPersonalTransactions.filter(tx => {
+        if (!tx.date) return false;
+        const parts = String(tx.date).split('T')[0].split('-');
+        if (parts.length === 3) {
+          const y = parseInt(parts[0], 10);
+          const m = parseInt(parts[1], 10) - 1;
+          return m === currentMonth && y === currentYear;
+        }
         const d = new Date(tx.date);
         return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
       });
@@ -797,6 +832,48 @@ export default function Dashboard() {
     const overallBalance = overallIncome - overallExpense;
     return overallIncome > 0 ? (overallBalance / overallIncome) * 100 : 0;
   }, [allPersonalTransactions]);
+
+  // ── Calculate Daily Logging Streak & Sync to Supabase ──
+  const streakCount = useMemo(() => {
+    if (!allPersonalTransactions || allPersonalTransactions.length === 0) return 1;
+    const datesSet = new Set<string>();
+    allPersonalTransactions.forEach(tx => {
+      if (tx.date) {
+        datesSet.add(tx.date.split('T')[0]);
+      }
+    });
+
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
+    const yesterdayStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
+
+    let streak = 0;
+    let checkDate = datesSet.has(todayStr) ? today : (datesSet.has(yesterdayStr) ? yesterday : null);
+
+    if (!checkDate) return 1;
+
+    while (checkDate) {
+      const dStr = `${checkDate.getFullYear()}-${String(checkDate.getMonth() + 1).padStart(2, '0')}-${String(checkDate.getDate()).padStart(2, '0')}`;
+      if (datesSet.has(dStr)) {
+        streak++;
+        checkDate = new Date(checkDate.getTime() - 24 * 60 * 60 * 1000);
+      } else {
+        break;
+      }
+    }
+
+    return Math.max(1, streak);
+  }, [allPersonalTransactions]);
+
+  useEffect(() => {
+    if (user?.id && streakCount > 0) {
+      try {
+        localStorage.setItem(`msfamily_streak_${user.id}`, String(streakCount));
+      } catch {}
+    }
+  }, [user?.id, streakCount]);
+
   const goalProgress = useMemo(() => Math.min((allTimePersonalBalance / savingsGoal.target) * 100, 100), [allTimePersonalBalance, savingsGoal.target]);
 
   const chartData = useMemo(() => {
@@ -996,6 +1073,7 @@ export default function Dashboard() {
         t={t}
         balanceFilter={balanceFilter}
         onFilterChange={setBalanceFilter}
+        streakCount={streakCount}
       />
 
       {/* ── Stat Grid ── */}
@@ -1045,6 +1123,9 @@ export default function Dashboard() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* ── Google AdMob Banner (Dashboard Only - Above Savings Container) ── */}
+      <AdMobBanner />
 
       {/* ── Savings Glance ── */}
       <SavingsGlance t={t} navigate={navigate} />
@@ -1105,16 +1186,15 @@ export default function Dashboard() {
                 <div className="flex items-center gap-2">
                   <h4 className="text-sm font-black text-slate-800 dark:text-slate-100 capitalize">
                     {planId === 'personal_monthly' ? t('Personal Premium Monthly') :
-                     planId === 'personal_yearly' ? t('Personal Premium Yearly') :
-                     planId === 'family_monthly' ? t('Family Premium Monthly') :
-                     planId === 'family_yearly' ? t('Family Premium Yearly') :
-                     t(planId.replace(/_/g, ' '))}
+                      planId === 'personal_yearly' ? t('Personal Premium Yearly') :
+                        planId === 'family_monthly' ? t('Family Premium Monthly') :
+                          planId === 'family_yearly' ? t('Family Premium Yearly') :
+                            t(planId.replace(/_/g, ' '))}
                   </h4>
-                  <span className={`text-[9px] font-black px-2 py-0.5 rounded-[6px] uppercase ${
-                    isPremium
+                  <span className={`text-[9px] font-black px-2 py-0.5 rounded-[6px] uppercase ${isPremium
                       ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/20'
                       : 'bg-slate-100 dark:bg-slate-800 text-slate-500 border border-slate-200/50 dark:border-slate-700/50'
-                  }`}>
+                    }`}>
                     {isPremium ? t('Premium') : t('Free')}
                   </span>
                 </div>
@@ -1144,13 +1224,12 @@ export default function Dashboard() {
                   initial={{ width: 0 }}
                   animate={{ width: `${storageUsage.percentage}%` }}
                   transition={{ duration: 0.8, ease: 'easeOut' }}
-                  className={`h-full rounded-full ${
-                    storageUsage.percentage > 80
+                  className={`h-full rounded-full ${storageUsage.percentage > 80
                       ? 'bg-gradient-to-r from-rose-500 to-red-600 shadow-[0_0_8px_rgba(244,63,94,0.3)]'
                       : storageUsage.percentage > 50
                         ? 'bg-gradient-to-r from-amber-400 to-orange-500 shadow-[0_0_8px_rgba(245,158,11,0.3)]'
                         : 'bg-gradient-to-r from-emerald-400 to-teal-500 shadow-[0_0_8px_rgba(16,185,129,0.3)]'
-                  }`}
+                    }`}
                 />
               </div>
             </div>

@@ -4,4 +4,14 @@
     <string name="title_activity_main">MS Family</string>
     <string name="package_name">com.msfamily.app</string>
     <string name="custom_url_scheme">com.msfamily.app</string>
+    <string name="financial_widget_name">Financial Summary</string>
+    <string name="financial_widget_description">Shows today\'s expenses, monthly savings, and budget progress.</string>
+    <string name="bills_widget_name">Upcoming Bills</string>
+    <string name="bills_widget_description">Shows your next due bills and remaining days.</string>
+    <string name="quick_actions_widget_name">Quick Actions</string>
+    <string name="quick_actions_widget_description">One-tap shortcuts to common tasks.</string>
+    <string name="budget_widget_name">Budget Progress</string>
+    <string name="budget_widget_description">Visual indicator of your monthly budget status.</string>
+    <string name="insights_widget_name">Smart Insights</string>
+    <string name="insights_widget_description">Intelligent AI spending insights and suggestions.</string>
 </resources>

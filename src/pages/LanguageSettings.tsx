@@ -120,8 +120,8 @@ const LanguageSettings: React.FC = () => {
     setLanguage(newLang);
     const selectedLang = LANGUAGE_LIST.find(l => l.code === newLang);
     const label = selectedLang 
-      ? `Language set to ${selectedLang.name}` 
-      : `Language set to ${newLang}`;
+      ? t('Language set to {name}', { name: selectedLang.name })
+      : t('Language set to {name}', { name: newLang });
     syncToBackend('language', newLang, label);
   };
 

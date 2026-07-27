@@ -109,7 +109,20 @@ export const DICTIONARIES: Record<string, Record<string, string>> = {
     'Silver': 'Plata',
     'Growth': 'Crecimiento',
     'Savings Glance': 'Vistazo de Ahorros',
-    'Applying language settings...': 'Aplicando configuración de idioma...'
+    'Applying language settings...': 'Aplicando configuración de idioma...',
+    'Language set to {name}': 'Idioma establecido en {name}',
+    'Manage Storage': 'Administrar Almacenamiento',
+    'Subscription Management': 'Gestión de Suscripciones',
+    'Upgrade to Premium': 'Actualizar a Premium',
+    'Confirm Delete File': 'Confirmar Eliminar Archivo',
+    'Are you sure you want to permanently delete this file? This will remove all database linkages and cannot be undone.': '¿Está seguro de que desea eliminar este archivo permanentemente? Esto eliminará todos los vínculos de la base de datos y no se puede deshacer.',
+    'Delete Permanently': 'Eliminar Permanentemente',
+    'File deleted successfully and space reclaimed.': 'Archivo eliminado con éxito y espacio recuperado.',
+    'Upgrade Portal': 'Portal de Actualización',
+    'Advanced Analytics': 'Análisis Avanzado',
+    'Live Family Tracking': 'Seguimiento Familiar en Vivo',
+    'View Premium Plans': 'Ver Planes Premium',
+    'Go to Dashboard': 'Ir al Panel'
   },
 
   // French (fr)
@@ -184,7 +197,20 @@ export const DICTIONARIES: Record<string, Record<string, string>> = {
     'Silver': 'Argent',
     'Growth': 'Croissance',
     'Savings Glance': 'Aperçu de l\'Épargne',
-    'Applying language settings...': 'Application des paramètres de langue...'
+    'Applying language settings...': 'Application des paramètres de langue...',
+    'Language set to {name}': 'Langue définie sur {name}',
+    'Manage Storage': 'Gérer le stockage',
+    'Subscription Management': 'Gestion des abonnements',
+    'Upgrade to Premium': 'Mettre à niveau vers Premium',
+    'Confirm Delete File': 'Confirmer la suppression du fichier',
+    'Are you sure you want to permanently delete this file? This will remove all database linkages and cannot be undone.': 'Voulez-vous vraiment supprimer définitivement ce fichier ? Cela supprimera tous les liens de la base de données et ne pourra pas être annulé.',
+    'Delete Permanently': 'Supprimer définitivement',
+    'File deleted successfully and space reclaimed.': 'Fichier supprimé avec succès et espace récupéré.',
+    'Upgrade Portal': 'Portail de mise à niveau',
+    'Advanced Analytics': 'Analyses Avancées',
+    'Live Family Tracking': 'Suivi de la famille en direct',
+    'View Premium Plans': 'Voir les plans Premium',
+    'Go to Dashboard': 'Aller au tableau de bord'
   },
 
   // German (de)
@@ -409,7 +435,20 @@ export const DICTIONARIES: Record<string, Record<string, string>> = {
     'Silver': 'الفضة',
     'Growth': 'النمو',
     'Savings Glance': 'لمحة عن المدخرات',
-    'Applying language settings...': 'جاري تطبيق إعدادات اللغة...'
+    'Applying language settings...': 'جاري تطبيق إعدادات اللغة...',
+    'Language set to {name}': 'تم تغيير اللغة إلى {name}',
+    'Manage Storage': 'إدارة المساحة',
+    'Subscription Management': 'إدارة الاشتراك',
+    'Upgrade to Premium': 'ترقية إلى بريميوم',
+    'Confirm Delete File': 'تأكيد حذف الملف',
+    'Are you sure you want to permanently delete this file? This will remove all database linkages and cannot be undone.': 'هل أنت متأكد أنك تريد حذف هذا الملف نهائياً؟ سيؤدي هذا إلى إزالة جميع روابط قاعدة البيانات ولا يمكن التراجع عنه.',
+    'Delete Permanently': 'حذف نهائي',
+    'File deleted successfully and space reclaimed.': 'تم حذف الملف بنجاح واستعادة المساحة.',
+    'Upgrade Portal': 'بوابة الترقية',
+    'Advanced Analytics': 'التحليلات المتقدمة',
+    'Live Family Tracking': 'تتبع العائلة المباشر',
+    'View Premium Plans': 'عرض خطط بريميوم',
+    'Go to Dashboard': 'الذهاب إلى لوحة التحكم'
   },
 
   // Chinese (Simplified) (zh-CN)
@@ -784,7 +823,20 @@ export const DICTIONARIES: Record<string, Record<string, string>> = {
     'Silver': 'चांदी',
     'Growth': 'बढ़त',
     'Savings Glance': 'बचत की झलक',
-    'Applying language settings...': 'भाषा सेटिंग्स लागू की जा रही हैं...'
+    'Applying language settings...': 'भाषा सेटिंग्स लागू की जा रही हैं...',
+    'Language set to {name}': 'भाषा {name} पर सेट की गई',
+    'Manage Storage': 'स्टोरेज प्रबंधित करें',
+    'Subscription Management': 'सदस्यता प्रबंधन',
+    'Upgrade to Premium': 'प्रीमियम में अपग्रेड करें',
+    'Confirm Delete File': 'फ़ाइल हटाने की पुष्टि करें',
+    'Are you sure you want to permanently delete this file? This will remove all database linkages and cannot be undone.': 'क्या आप वाकई इस फ़ाइल को स्थायी रूप से हटाना चाहते हैं? इससे सभी डेटाबेस लिंक हटा दिए जाएंगे और इसे पूर्ववत नहीं किया जा सकता।',
+    'Delete Permanently': 'स्थायी रूप से हटाएं',
+    'File deleted successfully and space reclaimed.': 'फ़ाइल सफलतापूर्वक हटा दी गई और स्पेस वापस मिल गया।',
+    'Upgrade Portal': 'अपग्रेड पोर्टल',
+    'Advanced Analytics': 'उन्नत विश्लेषण',
+    'Live Family Tracking': 'लाइव फैमिली ट्रैकिंग',
+    'View Premium Plans': 'प्रीमियम प्लान देखें',
+    'Go to Dashboard': 'डैशबोर्ड पर जाएं'
   },
 
   // Telugu (te)

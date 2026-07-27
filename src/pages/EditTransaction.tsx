@@ -9,6 +9,8 @@ import { invalidateStorageCache, getUserStorageUsage } from '../utils/storageSer
 import { useSubscription, FREE_STORAGE_LIMIT_BYTES } from '../context/SubscriptionContext';
 import { supabase } from '../lib/supabase';
 import { motion, AnimatePresence } from 'framer-motion';
+import { generateVision } from '../utils/aiService';
+
 import { Capacitor } from '@capacitor/core';
 import { suppressLockForFilePicker } from '../utils/appLockService';
 import { CapacitorPluginMlKitTextRecognition } from '@pantrist/capacitor-plugin-ml-kit-text-recognition';
@@ -305,65 +307,40 @@ export default function EditTransaction() {
       let extractedText = '';
       const isNative = Capacitor.isNativePlatform();
       let geminiSuccess = false;
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
 
-      if (apiKey) {
-        try {
-          const base64Image = await fileToBase64(file);
-          const requestBody = {
-            system_instruction: {
-              parts: [
-                {
-                  text: 'You are a highly precise Indian financial receipt parser. Analyze payment screenshots (Google Pay, PhonePe, Paytm, paper receipts) and perfectly extract the absolute Total Amount paid and the transaction Date. Output ONLY valid JSON.',
-                },
-              ],
-            },
-            contents: [
-              {
-                parts: [
-                  {
-                    text: 'Extract data to JSON: { "amount": "200.00", "date": "16 April 2026" }. Exclude currency symbols from amount.',
-                  },
-                  { inline_data: { mime_type: file.type || 'image/jpeg', data: base64Image } },
-                ],
-              },
-            ],
-            generationConfig: { response_mime_type: 'application/json', temperature: 0.1 },
-          };
-
-          const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(requestBody),
-              signal: controller.signal,
-            }
-          );
-
-          if (response.ok) {
-            const data = await response.json();
-            const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (responseText) {
-              const rawJson = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
-              const jsonResult = JSON.parse(rawJson);
-
-              if (jsonResult.amount && !isNaN(parseFloat(jsonResult.amount))) {
-                setAmount(jsonResult.amount);
-                setAmountError('');
-                geminiSuccess = true;
-              }
-              if (jsonResult.date) {
-                setNotes((prev) => (prev ? `${prev} | AI Scan: ${jsonResult.date}` : `AI Scan: ${jsonResult.date}`));
-              } else if (geminiSuccess) {
-                setNotes((prev) => (prev ? `${prev} | AI Scanned` : 'AI Scanned'));
-              }
-            }
+      // Try AI first (OpenRouter primary, Gemini fallback)
+      try {
+        const base64Image = await fileToBase64(file);
+        const responseText = await generateVision(
+          'Extract data to JSON: { "amount": "200.00", "date": "16 April 2026" }. Exclude currency symbols from amount.',
+          base64Image,
+          file.type || 'image/jpeg',
+          {
+            systemInstruction: 'You are a highly precise Indian financial receipt parser. Analyze payment screenshots (Google Pay, PhonePe, Paytm, paper receipts) and perfectly extract the absolute Total Amount paid and the transaction Date. Output ONLY valid JSON.',
+            temperature: 0.1,
+            responseFormatJson: true,
+            signal: controller.signal
           }
-        } catch (geminiErr: any) {
-          if (geminiErr.name === 'AbortError') throw geminiErr;
-          console.warn('Gemini extraction failed, falling back...', geminiErr);
+        );
+
+        if (responseText) {
+          const rawJson = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+          const jsonResult = JSON.parse(rawJson);
+
+          if (jsonResult.amount && !isNaN(parseFloat(jsonResult.amount))) {
+            setAmount(jsonResult.amount);
+            setAmountError('');
+            geminiSuccess = true;
+          }
+          if (jsonResult.date) {
+            setNotes((prev) => (prev ? `${prev} | AI Scan: ${jsonResult.date}` : `AI Scan: ${jsonResult.date}`));
+          } else if (geminiSuccess) {
+            setNotes((prev) => (prev ? `${prev} | AI Scanned` : 'AI Scanned'));
+          }
         }
+      } catch (geminiErr: any) {
+        if (geminiErr.name === 'AbortError') throw geminiErr;
+        console.warn('AI receipt extraction failed, falling back...', geminiErr);
       }
 
       if (!geminiSuccess && isNative) {

@@ -5,7 +5,7 @@ import { createSafeContext } from './contextHelper';
 export interface LanguageContextType {
   language: string;
   setLanguage: (lang: string) => void;
-  t: (text: string) => string;
+  t: (text: string, replacements?: Record<string, string | number>) => string;
   isTranslating: boolean;
   isChangingLanguage: boolean;
   prefetch: (texts: string[]) => Promise<void>;
@@ -66,21 +66,24 @@ export const LanguageProvider: React.FC<LanguageProviderProps> = ({ children }) 
    * Enterprise translation lookup function.
    * Looks up translated values in our O(1) dictionary and falls back to original text.
    */
-  const t = useCallback((text: string) => {
+  const t = useCallback((text: string, replacements?: Record<string, string | number>) => {
     if (!text || typeof text !== 'string') return text;
 
-    // English: instant return (source text is in English)
-    if (language === 'en') {
-      return text;
+    let translated = text;
+    if (language !== 'en') {
+      const dict = DICTIONARIES[language];
+      if (dict && dict[text]) {
+        translated = dict[text];
+      }
     }
 
-    const dict = DICTIONARIES[language];
-    if (dict && dict[text]) {
-      return dict[text];
+    if (replacements) {
+      Object.entries(replacements).forEach(([key, val]) => {
+        translated = translated.replace(new RegExp(`{${key}}`, 'g'), String(val));
+      });
     }
 
-    // Fallback to English (the original text itself)
-    return text;
+    return translated;
   }, [language]);
 
   // Prefetch no-op helper (kept for business logic compatibility)

@@ -12,3 +12,4 @@ google-services.json
 .codewhale/
 *.aab
 *_orig.png
+.gemini/

@@ -1,5 +1,6 @@
 apply plugin: 'com.android.application'
 apply plugin: 'kotlin-android'
+apply plugin: 'org.jetbrains.kotlin.plugin.compose'
 // KSP replaces deprecated kapt for Kotlin 2.0+ annotation processing (Room)
 apply plugin: 'com.google.devtools.ksp'
 
@@ -10,8 +11,8 @@ android {
         applicationId "com.msfamily.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 2
-        versionName "1.1"
+        versionCode 147
+        versionName "1.4.7"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -22,6 +23,7 @@ android {
 
     buildFeatures {
         buildConfig = true
+        compose true
     }
 
     // Explicit compile options — must match capacitor.build.gradle's VERSION_21
@@ -115,6 +117,12 @@ dependencies {
 
     // WorkManager (Kotlin coroutines support)
     implementation "androidx.work:work-runtime-ktx:2.10.0"
+
+    // Jetpack Compose Runtime (Glance compile requirement)
+    implementation "androidx.compose.runtime:runtime:1.7.8"
+    // Jetpack Glance widgets
+    implementation "androidx.glance:glance-appwidget:1.1.1"
+    implementation "androidx.glance:glance-material3:1.1.1"
 }
 
 apply from: 'capacitor.build.gradle'

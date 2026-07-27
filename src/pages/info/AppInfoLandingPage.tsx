@@ -198,7 +198,7 @@ export default function AppInfoLandingPage() {
                 iconBg="rgba(88,86,214,0.12)"
                 iconColor="#5856D6"
                 title={t('App Version')}
-                subtitle="v1.0.0 (100)"
+                subtitle="v1.4.7 (147)"
                 onPress={() => navigate('/settings/version')}
               >
                 <ChevronRight size={15} className="text-slate-400 dark:text-slate-600" />

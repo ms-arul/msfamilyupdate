@@ -19,6 +19,8 @@ const FamilyInvite = React.lazy(() => import('./pages/FamilyInvite'));
 const MyProofs = React.lazy(() => import('./pages/MyProofs'));
 const Notifications = React.lazy(() => import('./pages/Notifications'));
 const Login = React.lazy(() => import('./pages/Login'));
+const Onboarding = React.lazy(() => import('./pages/Onboarding'));
+const PermissionsGate = React.lazy(() => import('./pages/PermissionsGate'));
 const Settings = React.lazy(() => import('./pages/Settings'));
 const ManageStorage = React.lazy(() => import('./pages/ManageStorage'));
 const LanguageSettings = React.lazy(() => import('./pages/LanguageSettings'));
@@ -59,6 +61,7 @@ import ShareActionSheet from './components/ShareActionSheet';
 import MaintenanceGuard from './components/MaintenanceGuard';
 import { SmsToast } from './components/ui/SmsToast';
 import NetworkStatusBar from './components/ui/NetworkStatusBar';
+import { initBackButtonManager } from './utils/backButtonManager';
 
 const PushNotificationSetup: React.FC = () => {
   usePushNotifications();
@@ -172,25 +175,7 @@ const BackButtonHandler: React.FC = () => {
   const location = useLocation();
 
   useEffect(() => {
-    if (!Capacitor.isNativePlatform()) return;
-
-    const listenerPromise = CapacitorApp.addListener('backButton', ({ canGoBack }) => {
-      // If on home/dashboard, exit the app
-      if (location.pathname === '/' || location.pathname === '') {
-        CapacitorApp.exitApp();
-      } else {
-        // Pop history stack if possible, else return to dashboard safely
-        if (canGoBack || window.history.length > 1) {
-          navigate(-1);
-        } else {
-          navigate('/', { replace: true });
-        }
-      }
-    });
-
-    return () => {
-      listenerPromise.then(l => l.remove());
-    };
+    return initBackButtonManager((path: any, options?: any) => navigate(path, options), location.pathname);
   }, [navigate, location.pathname]);
 
   return null;
@@ -351,11 +336,20 @@ interface ProtectedRouteProps {
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   const { user, loading } = useAuth();
+  const hasCompletedOnboarding = localStorage.getItem('hasCompletedOnboarding') === 'true';
+  const hasSeenPermissionsGate = localStorage.getItem('hasSeenPermissionsGate') === 'true';
+
   if (loading) {
     return <PageLoader />;
   }
+  if (!hasCompletedOnboarding) {
+    return <Navigate to="/onboarding" replace />;
+  }
   if (!user) {
     return <Navigate to="/login" replace />;
+  }
+  if (!hasSeenPermissionsGate) {
+    return <Navigate to="/permissions-gate" replace />;
   }
   return <>{children}</>;
 };
@@ -428,8 +422,10 @@ function App() {
                     <MaintenanceGuard>
                       <div className="bg-animated-gradient h-full min-h-screen">
                         <Suspense fallback={<PageLoader />}>
-                          <Routes>
+                           <Routes>
                             <Route path="/login" element={<Login />} />
+                            <Route path="/onboarding" element={<Onboarding />} />
+                            <Route path="/permissions-gate" element={<PermissionsGate />} />
                             <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
                               <Route index element={<Dashboard />} />
                               <Route path="transactions" element={<Transactions />} />

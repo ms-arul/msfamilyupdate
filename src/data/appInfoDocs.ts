@@ -67,8 +67,8 @@ export const APP_INFO_DOCS: Record<string, AppInfoDoc> = {
       developer: 'MS Technologies',
       website: 'https://msarul.xo.je',
       supportEmail: 'velgo7686@gmail.com',
-      version: '1.0.0',
-      buildNumber: '100',
+      version: '1.4.7',
+      buildNumber: '147',
       copyright: '© 2026 MS Technologies. All rights reserved.',
       socialLinks: [
         { name: 'GitHub', url: 'https://github.com/mstechnologies' },
@@ -292,8 +292,8 @@ export const APP_INFO_DOCS: Record<string, AppInfoDoc> = {
       {
         title: '1. App Build Parameters',
         content: [
-          '• Version: 1.0.0 (Production Release)',
-          '• Build Number: 100',
+          '• Version: 1.4.7 (Production Release)',
+          '• Build Number: 147',
           '• Release Date: July 13, 2026',
           '• Channel: Stable - Main'
         ]

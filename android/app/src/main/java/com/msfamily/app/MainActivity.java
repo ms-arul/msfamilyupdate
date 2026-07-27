@@ -118,6 +118,16 @@ public class MainActivity extends BridgeActivity {
         }
 
         handlePossibleShareIntent(getIntent());
+
+        // Schedule periodic Glance widget updates in the background (survives app kills)
+        try {
+            WidgetUpdateManager.INSTANCE.schedulePeriodicUpdates(getApplicationContext());
+            WidgetUpdateManager.INSTANCE.updateAllWidgets(getApplicationContext());
+            Log.d("MainActivity", "Successfully scheduled and triggered periodic Glance widget updates");
+        } catch (Exception e) {
+            Log.e("MainActivity", "Failed to schedule Glance widget updates: " + e.getMessage());
+        }
+
         super.onCreate(savedInstanceState);
 
         // Force WebView to grant WebRTC microphone permissions automatically & optimize rendering settings

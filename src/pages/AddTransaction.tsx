@@ -8,6 +8,8 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { motion, AnimatePresence } from 'framer-motion';
 import { invalidateStorageCache, getUserStorageUsage } from '../utils/storageService';
+import { generateVision } from '../utils/aiService';
+
 import { useSubscription, FREE_STORAGE_LIMIT_BYTES } from '../context/SubscriptionContext';
 import { Capacitor } from '@capacitor/core';
 import { suppressLockForFilePicker } from '../utils/appLockService';
@@ -337,66 +339,40 @@ export default function AddTransaction() {
       let extractedText = '';
       const isNative = Capacitor.isNativePlatform();
       let geminiSuccess = false;
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
 
-      // Try Gemini AI first
-      if (apiKey) {
-        try {
-          const base64Image = await fileToBase64(file);
-          const requestBody = {
-            system_instruction: {
-              parts: [
-                {
-                  text: 'You are a highly precise Indian financial receipt parser. Analyze payment screenshots (Google Pay, PhonePe, Paytm, paper receipts) and perfectly extract the absolute Total Amount paid and the transaction Date. Output ONLY valid JSON.',
-                },
-              ],
-            },
-            contents: [
-              {
-                parts: [
-                  {
-                    text: 'Extract data to JSON: { "amount": "200.00", "date": "16 April 2026" }. Exclude currency symbols from amount.',
-                  },
-                  { inline_data: { mime_type: file.type || 'image/jpeg', data: base64Image } },
-                ],
-              },
-            ],
-            generationConfig: { response_mime_type: 'application/json', temperature: 0.1 },
-          };
-
-          const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(requestBody),
-              signal: controller.signal,
-            }
-          );
-
-          if (response.ok) {
-            const data = await response.json();
-            const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (responseText) {
-              const rawJson = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
-              const jsonResult = JSON.parse(rawJson);
-
-              if (jsonResult.amount && !isNaN(parseFloat(jsonResult.amount))) {
-                setAmount(jsonResult.amount);
-                setAmountError(null);
-                geminiSuccess = true;
-              }
-              if (jsonResult.date) {
-                setNotes((prev) => (prev ? `${prev} | AI Scan: ${jsonResult.date}` : `AI Scan: ${jsonResult.date}`));
-              } else if (geminiSuccess) {
-                setNotes((prev) => (prev ? `${prev} | AI Scanned` : 'AI Scanned'));
-              }
-            }
+      // Try AI first (OpenRouter primary, Gemini fallback)
+      try {
+        const base64Image = await fileToBase64(file);
+        const responseText = await generateVision(
+          'Extract data to JSON: { "amount": "200.00", "date": "16 April 2026" }. Exclude currency symbols from amount.',
+          base64Image,
+          file.type || 'image/jpeg',
+          {
+            systemInstruction: 'You are a highly precise Indian financial receipt parser. Analyze payment screenshots (Google Pay, PhonePe, Paytm, paper receipts) and perfectly extract the absolute Total Amount paid and the transaction Date. Output ONLY valid JSON.',
+            temperature: 0.1,
+            responseFormatJson: true,
+            signal: controller.signal
           }
-        } catch (geminiErr: any) {
-          if (geminiErr.name === 'AbortError') throw geminiErr;
-          console.warn('Gemini extraction failed, falling back...', geminiErr);
+        );
+
+        if (responseText) {
+          const rawJson = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+          const jsonResult = JSON.parse(rawJson);
+
+          if (jsonResult.amount && !isNaN(parseFloat(jsonResult.amount))) {
+            setAmount(jsonResult.amount);
+            setAmountError(null);
+            geminiSuccess = true;
+          }
+          if (jsonResult.date) {
+            setNotes((prev) => (prev ? `${prev} | AI Scan: ${jsonResult.date}` : `AI Scan: ${jsonResult.date}`));
+          } else if (geminiSuccess) {
+            setNotes((prev) => (prev ? `${prev} | AI Scanned` : 'AI Scanned'));
+          }
         }
+      } catch (geminiErr: any) {
+        if (geminiErr.name === 'AbortError') throw geminiErr;
+        console.warn('AI receipt extraction failed, falling back...', geminiErr);
       }
 
       if (!geminiSuccess && isNative) {
@@ -880,15 +856,13 @@ export default function AddTransaction() {
               <div className="relative group">
                 {/* Focus glow */}
                 <div
-                  className={`absolute inset-0 rounded-[20px] blur-xl opacity-0 group-focus-within:opacity-100 transition-opacity duration-700 pointer-events-none ${
-                    type === 'expense' ? 'bg-rose-500/8' : type === 'income' ? 'bg-emerald-500/8' : 'bg-indigo-500/8'
-                  }`}
+                  className={`absolute inset-0 rounded-[20px] blur-xl opacity-0 group-focus-within:opacity-100 transition-opacity duration-700 pointer-events-none ${type === 'expense' ? 'bg-rose-500/8' : type === 'income' ? 'bg-emerald-500/8' : 'bg-indigo-500/8'
+                    }`}
                 />
                 {/* Currency prefix */}
                 <div
-                  className={`absolute left-5 top-1/2 -translate-y-1/2 z-30 pointer-events-none transition-all duration-300 font-sans text-2xl md:text-3xl font-bold ${
-                    type === 'expense' ? 'text-rose-500 dark:text-rose-400' : type === 'income' ? 'text-emerald-500 dark:text-emerald-400' : 'text-indigo-500 dark:text-indigo-400'
-                  }`}
+                  className={`absolute left-5 top-1/2 -translate-y-1/2 z-30 pointer-events-none transition-all duration-300 font-sans text-2xl md:text-3xl font-bold ${type === 'expense' ? 'text-rose-500 dark:text-rose-400' : type === 'income' ? 'text-emerald-500 dark:text-emerald-400' : 'text-indigo-500 dark:text-indigo-400'
+                    }`}
                 >
                   ₹
                 </div>
@@ -942,9 +916,9 @@ export default function AddTransaction() {
                 <label className="atx-label">
                   {t('Date')}
                 </label>
-                
+
                 {/* Single line date display with Change option */}
-                <div 
+                <div
                   onClick={() => setShowCalendarModal(true)}
                   className="flex items-center justify-between p-3.5 rounded-2xl bg-white/50 dark:bg-slate-900/50 border border-slate-200/60 dark:border-slate-800/80 backdrop-blur-md cursor-pointer hover:bg-white/80 dark:hover:bg-slate-800/50 transition-all duration-300 group"
                 >
@@ -983,7 +957,7 @@ export default function AddTransaction() {
                         onClick={() => setShowCalendarModal(false)}
                         className="absolute inset-0 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm"
                       />
-                      
+
                       {/* Modal Content */}
                       <motion.div
                         initial={{ opacity: 0, scale: 0.95, y: 15 }}

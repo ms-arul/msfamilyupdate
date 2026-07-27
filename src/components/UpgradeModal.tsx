@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { createPortal } from 'react-dom';
 import {
   X,
   CheckCircle,
@@ -16,6 +17,7 @@ import { useSubscription } from '../context/SubscriptionContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { useFamily } from '../context/FamilyContext';
+import { registerBackButtonHandler } from '../utils/backButtonManager';
 
 export default function UpgradeModal() {
   const { t } = useLanguage();
@@ -30,6 +32,15 @@ export default function UpgradeModal() {
     planId 
   } = useSubscription();
 
+  useEffect(() => {
+    if (showUpgradeModal) {
+      return registerBackButtonHandler('upgrade_modal', 100, () => {
+        setShowUpgradeModal(false);
+        return true;
+      });
+    }
+  }, [showUpgradeModal, setShowUpgradeModal]);
+
   const [planType, setPlanType] = useState<'personal' | 'family'>('family');
   const [billingInterval, setBillingInterval] = useState<'monthly' | 'yearly'>('yearly');
   const [couponCode, setCouponCode] = useState('');
@@ -40,6 +51,15 @@ export default function UpgradeModal() {
   const [isPaying, setIsPaying] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
+  const [paymentReceipt, setPaymentReceipt] = useState<{
+    status: 'success' | 'failed';
+    paymentId?: string;
+    orderId?: string;
+    amount: number;
+    planName: string;
+    date: string;
+    errorMessage?: string;
+  } | null>(null);
 
   // Dynamically load Razorpay checkout script
   useEffect(() => {
@@ -117,7 +137,9 @@ export default function UpgradeModal() {
         currency: "INR",
         name: "MS Family Premium",
         description: planType === 'family' ? "Family Premium Subscription" : "Personal Premium Subscription",
-        image: "/mslogo.png",
+        image: window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1')
+          ? ""
+          : `${window.location.origin}/mslogo.png`,
         order_id: orderRes.orderId,
         handler: async function (response: any) {
           try {
@@ -134,14 +156,36 @@ export default function UpgradeModal() {
 
             if (verifyRes.success) {
               setPaymentSuccess(true);
+              setPaymentReceipt({
+                status: 'success',
+                paymentId: response.razorpay_payment_id,
+                orderId: response.razorpay_order_id,
+                amount: orderRes.amount ? orderRes.amount / 100 : 0,
+                planName: planType === 'family' ? (billingInterval === 'yearly' ? 'Family Premium Yearly' : 'Family Premium Monthly') : (billingInterval === 'yearly' ? 'Personal Premium Yearly' : 'Personal Premium Monthly'),
+                date: new Date().toLocaleString(),
+              });
               setTimeout(() => {
                 handleClose();
               }, 1500);
             } else {
               setPaymentError(verifyRes.message);
+              setPaymentReceipt({
+                status: 'failed',
+                amount: orderRes.amount ? orderRes.amount / 100 : 0,
+                planName: planType === 'family' ? (billingInterval === 'yearly' ? 'Family Premium Yearly' : 'Family Premium Monthly') : (billingInterval === 'yearly' ? 'Personal Premium Yearly' : 'Personal Premium Monthly'),
+                date: new Date().toLocaleString(),
+                errorMessage: verifyRes.message || 'Signature verification failed.',
+              });
             }
           } catch (err: any) {
             setPaymentError(err.message || 'Payment verification failed.');
+            setPaymentReceipt({
+              status: 'failed',
+              amount: orderRes.amount ? orderRes.amount / 100 : 0,
+              planName: planType === 'family' ? (billingInterval === 'yearly' ? 'Family Premium Yearly' : 'Family Premium Monthly') : (billingInterval === 'yearly' ? 'Personal Premium Yearly' : 'Personal Premium Monthly'),
+              date: new Date().toLocaleString(),
+              errorMessage: err.message || 'Payment verification failed.',
+            });
           } finally {
             setIsPaying(false);
           }
@@ -162,17 +206,123 @@ export default function UpgradeModal() {
       const rzp = new (window as any).Razorpay(options);
       rzp.on('payment.failed', function (resp: any) {
         setPaymentError(resp.error?.description || 'Payment failed.');
+        setPaymentReceipt({
+          status: 'failed',
+          amount: orderRes.amount ? orderRes.amount / 100 : 0,
+          planName: planType === 'family' ? (billingInterval === 'yearly' ? 'Family Premium Yearly' : 'Family Premium Monthly') : (billingInterval === 'yearly' ? 'Personal Premium Yearly' : 'Personal Premium Monthly'),
+          date: new Date().toLocaleString(),
+          errorMessage: resp.error?.description || 'Payment failed.',
+        });
         setIsPaying(false);
       });
       rzp.open();
 
     } catch (err: any) {
       setPaymentError(err.message || 'Payment processing failed.');
+      setPaymentReceipt({
+        status: 'failed',
+        amount: 0,
+        planName: planType === 'family' ? (billingInterval === 'yearly' ? 'Family Premium Yearly' : 'Family Premium Monthly') : (billingInterval === 'yearly' ? 'Personal Premium Yearly' : 'Personal Premium Monthly'),
+        date: new Date().toLocaleString(),
+        errorMessage: err.message || 'Payment processing failed.',
+      });
       setIsPaying(false);
     }
   };
 
-  if (!showUpgradeModal) return null;
+  // Render portaled Payment Receipt Modal at the top level so it persists even after closing the upgrade checkout overlay
+  const renderReceiptModal = () => {
+    return createPortal(
+      <AnimatePresence>
+        {paymentReceipt && (
+          <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setPaymentReceipt(null)}
+              className="absolute inset-0 bg-slate-900/60 dark:bg-black/85 backdrop-blur-md"
+            />
+            
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              className="relative w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800/80 rounded-3xl p-6 shadow-2xl z-10 overflow-hidden text-center"
+            >
+              {/* Visual indicator header */}
+              <div className="mb-6">
+                {paymentReceipt.status === 'success' ? (
+                  <div className="w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mx-auto mb-3 text-emerald-500 animate-bounce">
+                    <CheckCircle size={36} />
+                  </div>
+                ) : (
+                  <div className="w-16 h-16 rounded-full bg-rose-500/10 border border-rose-500/20 flex items-center justify-center mx-auto mb-3 text-rose-500 animate-pulse">
+                    <AlertCircle size={36} />
+                  </div>
+                )}
+                <h3 className="text-xl font-black text-slate-900 dark:text-white">
+                  {paymentReceipt.status === 'success' ? t('Payment Successful!') : t('Payment Failed')}
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  {paymentReceipt.status === 'success' 
+                    ? t('Thank you! Your premium subscription is now active.') 
+                    : t('Your transaction could not be completed.')}
+                </p>
+              </div>
+
+              {/* Receipt Details Card */}
+              <div className="bg-slate-50 dark:bg-white/[0.02] border border-slate-200/50 dark:border-white/5 rounded-2xl p-4 space-y-3 mb-6 text-xs text-left">
+                <div className="flex justify-between items-center pb-2 border-b border-slate-200/50 dark:border-white/5">
+                  <span className="text-slate-400">{t('Product')}</span>
+                  <span className="font-bold text-slate-800 dark:text-slate-200">{t(paymentReceipt.planName)}</span>
+                </div>
+                <div className="flex justify-between items-center pb-2 border-b border-slate-200/50 dark:border-white/5">
+                  <span className="text-slate-400">{t('Paid Amount')}</span>
+                  <span className="font-extrabold text-primary-500 text-sm">₹{paymentReceipt.amount}</span>
+                </div>
+                {paymentReceipt.paymentId && (
+                  <div className="flex justify-between items-center pb-2 border-b border-slate-200/50 dark:border-white/5">
+                    <span className="text-slate-400">{t('Payment ID')}</span>
+                    <span className="font-mono text-[10px] font-bold text-slate-700 dark:text-slate-350">{paymentReceipt.paymentId}</span>
+                  </div>
+                )}
+                {paymentReceipt.orderId && (
+                  <div className="flex justify-between items-center pb-2 border-b border-slate-200/50 dark:border-white/5">
+                    <span className="text-slate-400">{t('Order ID')}</span>
+                    <span className="font-mono text-[10px] font-bold text-slate-700 dark:text-slate-350">{paymentReceipt.orderId}</span>
+                  </div>
+                )}
+                <div className="flex justify-between items-center pb-2 border-b border-slate-200/50 dark:border-white/5">
+                  <span className="text-slate-400">{t('Date & Time')}</span>
+                  <span className="font-bold text-slate-700 dark:text-slate-350">{paymentReceipt.date}</span>
+                </div>
+                {paymentReceipt.errorMessage && (
+                  <div className="pt-1 text-rose-500 font-semibold text-[10px] leading-relaxed">
+                    <span className="text-slate-400 block mb-0.5">{t('Reason for Failure:')}</span>
+                    {t(paymentReceipt.errorMessage)}
+                  </div>
+                )}
+              </div>
+
+              {/* Close Button */}
+              <button
+                onClick={() => setPaymentReceipt(null)}
+                className="w-full py-3 rounded-2xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:opacity-90 active:scale-[0.98] font-bold text-xs transition-all shadow-md"
+              >
+                {t('Close Receipt')}
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>,
+      document.body
+    );
+  };
+
+  if (!showUpgradeModal) {
+    return renderReceiptModal();
+  }
 
   return (
     <AnimatePresence>
@@ -432,6 +582,7 @@ export default function UpgradeModal() {
           )}
         </motion.div>
       </div>
+      {renderReceiptModal()}
     </AnimatePresence>
   );
 }

@@ -1,4 +1,5 @@
 import { Capacitor } from '@capacitor/core';
+import { generateText } from './aiService';
 
 export interface MetalRates {
   gold24: number;
@@ -46,27 +47,13 @@ function parseGeminiJson(text: string): any {
 }
 
 async function fetchRatesFromAI(): Promise<MetalRates> {
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-  if (!apiKey) throw new Error('Gemini API key missing');
-
   const prompt = "Return today's gold (22K, 24K) and silver rate in India per gram in JSON format only.";
 
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.1 }
-      })
-    }
-  );
+  const textResponse = await generateText(prompt, {
+    temperature: 0.1,
+    responseFormatJson: true
+  });
 
-  if (!response.ok) throw new Error('Gemini API failed');
-
-  const data = await response.json();
-  const textResponse = data.candidates[0].content.parts[0].text;
   const parsed = parseGeminiJson(textResponse);
   
   const gold24 = parsed.gold24 || parsed.gold_24k || parsed.gold24k || FALLBACK_RATES.gold24;

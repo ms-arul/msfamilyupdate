@@ -8,6 +8,8 @@ import { useAuth } from '../context/AuthContext';
 import { useFamily } from '../context/FamilyContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useCall } from '../context/CallContext';
+import { useSubscription } from '../context/SubscriptionContext';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import {
   updateMyLocationOnce, getDistance,
@@ -188,6 +190,40 @@ export default function LiveTracking() {
   const familyId = family?.id || null;
   const { t } = useLanguage();
   const { startCall } = useCall();
+  const { isPremium } = useSubscription();
+  const navigate = useNavigate();
+
+  // If not premium, render premium lock screen early
+  if (!isPremium) {
+    return (
+      <div className="w-full max-w-lg mx-auto p-6 text-center space-y-6 relative z-10 pt-16 animate-[fadeIn_0.2s_ease-out]">
+        <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-bl from-primary-500/10 to-transparent rounded-full blur-3xl pointer-events-none -z-10" />
+        <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-amber-500/20 to-orange-500/20 backdrop-blur-xl border border-amber-500/30 flex items-center justify-center mx-auto shadow-lg shadow-amber-500/10">
+          <Lock size={36} className="text-amber-500" />
+        </div>
+        <div className="space-y-2">
+          <h2 className="text-2xl font-black text-slate-800 dark:text-slate-100">{t('Live Family Tracking')}</h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400 max-w-xs mx-auto leading-relaxed">
+            {t('Keep your family safe with real-time location sharing, battery monitoring, and instant encrypted calls. Upgrade to Family Premium to unlock.')}
+          </p>
+        </div>
+        <div className="flex flex-col gap-3 max-w-xs mx-auto pt-4">
+          <button
+            onClick={() => navigate('/subscription')}
+            className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 text-white font-extrabold text-sm shadow-md shadow-amber-500/25 active:scale-95 transition-all"
+          >
+            {t('View Premium Plans')}
+          </button>
+          <button
+            onClick={() => navigate('/')}
+            className="w-full py-3.5 rounded-2xl bg-slate-100 hover:bg-slate-200 dark:bg-white/[0.04] dark:hover:bg-white/[0.08] text-slate-700 dark:text-slate-350 font-bold text-sm transition-all"
+          >
+            {t('Go to Dashboard')}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const [permissionGranted, setPermissionGranted] = useState<boolean | null>(null);
   const [leafletReady, setLeafletReady] = useState<boolean>(false);

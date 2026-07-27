@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { createPortal } from 'react-dom';
 import {
   ArrowLeft,
   Database,
@@ -14,6 +15,7 @@ import {
   FileImage,
   Sparkles,
   Search,
+  X,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
@@ -43,7 +45,7 @@ export default function ManageStorage() {
   const navigate = useNavigate();
   const { t } = useLanguage();
   const { user } = useAuth();
-  const { family } = useFamily();
+  const { family, members } = useFamily();
   const { planId, features, isPremium } = useSubscription();
 
   const [activeTab, setActiveTab] = useState<'all' | 'documents' | 'receipts'>('all');
@@ -98,13 +100,16 @@ export default function ManageStorage() {
           if (file.name !== '.emptyFolderPlaceholder' && file.metadata?.size) {
             const path = `${user.id}/${file.name}`;
             const publicUrl = supabase.storage.from('proofs').getPublicUrl(path).data.publicUrl;
-            loadedFiles.push({
-              name: file.name,
-              size: file.metadata.size,
-              updated_at: file.updated_at || file.created_at || new Date().toISOString(),
-              publicUrl,
-              type: 'receipt'
-            });
+            
+            if (!loadedFiles.some((f) => f.publicUrl === publicUrl)) {
+              loadedFiles.push({
+                name: file.name,
+                size: file.metadata.size,
+                updated_at: file.updated_at || file.created_at || new Date().toISOString(),
+                publicUrl,
+                type: 'receipt',
+              });
+            }
           }
         });
       }
@@ -119,13 +124,16 @@ export default function ManageStorage() {
           if (file.name !== '.emptyFolderPlaceholder' && file.metadata?.size) {
             const path = `my_proofs/${user.id}/${file.name}`;
             const publicUrl = supabase.storage.from('proofs').getPublicUrl(path).data.publicUrl;
-            loadedFiles.push({
-              name: file.name,
-              size: file.metadata.size,
-              updated_at: file.updated_at || file.created_at || new Date().toISOString(),
-              publicUrl,
-              type: 'document'
-            });
+            
+            if (!loadedFiles.some((f) => f.publicUrl === publicUrl)) {
+              loadedFiles.push({
+                name: file.name,
+                size: file.metadata.size,
+                updated_at: file.updated_at || file.created_at || new Date().toISOString(),
+                publicUrl,
+                type: 'document',
+              });
+            }
           }
         });
       }
@@ -148,52 +156,93 @@ export default function ManageStorage() {
     }
   }, [user?.id, loadStorageUsage, loadFiles]);
 
+  // Extract path and owner details from publicUrl
+  const extractPathAndOwner = (url: string | null) => {
+    if (!url) return null;
+    const marker = '/object/public/proofs/';
+    const idx = url.indexOf(marker);
+    if (idx === -1) return null;
+    
+    const relativePath = decodeURIComponent(url.substring(idx + marker.length));
+    
+    let ownerId = '';
+    if (relativePath.startsWith('my_proofs/')) {
+      const parts = relativePath.split('/');
+      ownerId = parts[1]; // parts[0] is 'my_proofs', parts[1] is ownerId
+    } else {
+      const parts = relativePath.split('/');
+      ownerId = parts[0]; // parts[0] is ownerId
+    }
+    
+    return { relativePath, ownerId };
+  };
+
   // Handle file deletion
   const handleDeleteFile = async () => {
     if (!deleteTarget || !user?.id) return;
     setIsDeleting(true);
     try {
-      const filePath = deleteTarget.type === 'receipt'
-        ? `${user.id}/${deleteTarget.name}`
-        : `my_proofs/${user.id}/${deleteTarget.name}`;
+      const fileInfo = extractPathAndOwner(deleteTarget.publicUrl);
+      if (!fileInfo) {
+        throw new Error(t('Invalid file path.'));
+      }
+      
+      const { relativePath, ownerId } = fileInfo;
 
-      // 1. Remove file from storage
+      // Ownership Validation
+      const isOwner = ownerId === user.id;
+      const isFamilyMember = members.some((m) => m.user_id === ownerId);
+      if (!isOwner && !isFamilyMember) {
+        throw new Error(t('You do not have permission to delete this file. It belongs to another family.'));
+      }
+
+      // 1. Remove file from storage first (atomic step)
       const { error: storageError } = await supabase.storage
         .from('proofs')
-        .remove([filePath]);
+        .remove([relativePath]);
 
       if (storageError) {
-        console.warn('Storage removal warning (might already be deleted):', storageError.message);
+        if (storageError.message?.includes('Permission') || storageError.message?.includes('Unauthorized')) {
+          throw new Error(t('Permission denied. You cannot delete this file.'));
+        }
+        throw new Error(`${t('Storage deletion failed:')} ${storageError.message}`);
       }
 
       // 2. Cleanup references in Database
       if (deleteTarget.type === 'receipt') {
-        // Set transaction proof_url to null
+        // Set transaction proof_url to null for any matching transactions
         const { error: dbError } = await supabase
           .from('transactions')
           .update({ proof_url: null })
-          .eq('member_id', user.id)
           .eq('proof_url', deleteTarget.publicUrl);
 
-        if (dbError) throw dbError;
+        if (dbError) {
+          throw new Error(`${t('Database update failed:')} ${dbError.message}`);
+        }
       } else {
-        // Delete the custom document if this file matches the front image
-        const { error: dbError1 } = await supabase
-          .from('my_proofs')
-          .delete()
-          .eq('user_id', user.id)
-          .eq('image_url', deleteTarget.publicUrl);
+        const isBackImage = deleteTarget.name.includes('_back_');
+        
+        if (isBackImage) {
+          // If it's a back image, update the document record to set back_image_url to null
+          const { error: dbError } = await supabase
+            .from('my_proofs')
+            .update({ back_image_url: null })
+            .eq('back_image_url', deleteTarget.publicUrl);
 
-        if (dbError1) throw dbError1;
+          if (dbError) {
+            throw new Error(`${t('Database update failed:')} ${dbError.message}`);
+          }
+        } else {
+          // If it's the front/main image, delete the entire custom document record
+          const { error: dbError } = await supabase
+            .from('my_proofs')
+            .delete()
+            .eq('image_url', deleteTarget.publicUrl);
 
-        // Update document to remove back image reference if this file matches the back image
-        const { error: dbError2 } = await supabase
-          .from('my_proofs')
-          .update({ back_image_url: null })
-          .eq('user_id', user.id)
-          .eq('back_image_url', deleteTarget.publicUrl);
-
-        if (dbError2) throw dbError2;
+          if (dbError) {
+            throw new Error(`${t('Database deletion failed:')} ${dbError.message}`);
+          }
+        }
       }
 
       // 3. Clear cache and refresh state
@@ -360,13 +409,13 @@ export default function ManageStorage() {
             <p className="text-[10px] text-slate-500 mt-0.5">{t('Files uploaded as transaction proofs or My Proofs documents will appear here.')}</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
             {filteredFiles.map((file) => (
               <motion.div
                 key={file.publicUrl}
                 layout
                 transition={SPRING_SOFT}
-                className={`${glass.card} rounded-3xl overflow-hidden group relative flex flex-col`}
+                className={`${glass.card} rounded-[20px] sm:rounded-3xl overflow-hidden group relative flex flex-col`}
               >
                 {/* Image Thumbnail */}
                 <div className="aspect-[4/3] bg-slate-100 dark:bg-slate-950/40 relative overflow-hidden flex items-center justify-center border-b border-slate-200/50 dark:border-white/5">
@@ -406,7 +455,7 @@ export default function ManageStorage() {
                 </div>
 
                 {/* Info block */}
-                <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
+                <div className="p-3 sm:p-4 flex-1 flex flex-col justify-between space-y-2 sm:space-y-3">
                   <div>
                     <div className="flex items-center gap-1.5 mb-1">
                       {file.type === 'document' ? (
@@ -435,77 +484,95 @@ export default function ManageStorage() {
 
       </div>
 
-      {/* ── Lightbox Preview Modal ── */}
-      <AnimatePresence>
-        {previewImage && (
-          <div className="fixed inset-0 z-[99999] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4">
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="relative max-w-full max-h-full"
-            >
-              <button
-                onClick={() => setPreviewImage(null)}
-                className="absolute -top-12 right-0 p-2 text-white hover:text-slate-300 transition-colors"
-              >
-                Close (Esc)
-              </button>
-              <img src={previewImage} alt="Fullscreen preview" className="max-w-[90vw] max-h-[85vh] object-contain rounded-2xl shadow-2xl" />
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* ── Delete Confirmation Modal ── */}
-      <AnimatePresence>
-        {deleteTarget && (
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+      {/* ── Lightbox Preview Modal (Portaled) ── */}
+      {createPortal(
+        <AnimatePresence>
+          {previewImage && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setDeleteTarget(null)}
-              className="absolute inset-0 bg-slate-900/60 dark:bg-black/85 backdrop-blur-md"
-            />
-            
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 15 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 15 }}
-              className="relative w-full max-w-sm bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800/80 rounded-3xl p-6 shadow-2xl z-10 text-center"
+              className="fixed inset-0 z-[999999] bg-black/95 backdrop-blur-md flex flex-col items-center justify-center p-4"
             >
-              <div className="w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center mx-auto mb-4 text-rose-500">
-                <Trash2 size={24} />
-              </div>
-              <h3 className="text-lg font-black text-slate-900 dark:text-white mb-2">
-                {t('Confirm Delete File')}
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mb-6 leading-relaxed">
-                {t('Are you sure you want to permanently delete this file? This will remove all database linkages and cannot be undone.')}
-              </p>
-
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setDeleteTarget(null)}
-                  disabled={isDeleting}
-                  className="flex-1 py-2.5 rounded-2xl bg-slate-100 hover:bg-slate-200 dark:bg-white/[0.04] dark:hover:bg-white/[0.08] text-slate-600 dark:text-slate-300 font-bold text-xs transition-colors disabled:opacity-40"
-                >
-                  {t('Cancel')}
-                </button>
-                <button
-                  onClick={handleDeleteFile}
-                  disabled={isDeleting}
-                  className="flex-1 py-2.5 rounded-2xl bg-rose-500 hover:bg-rose-600 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-rose-500/20 disabled:opacity-40"
-                >
-                  {isDeleting ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
-                  {t('Delete Permanently')}
-                </button>
-              </div>
+              {/* Close button - floating at the top right of the viewport with safe area space */}
+              <button
+                onClick={() => setPreviewImage(null)}
+                className="absolute top-4 right-4 p-3 bg-white/10 hover:bg-white/20 active:scale-90 backdrop-blur-md rounded-full text-white transition-all shadow-lg border border-white/10 z-[1000000]"
+                aria-label={t('Close')}
+              >
+                <X size={20} />
+              </button>
+              
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                className="w-full max-w-lg max-h-[80vh] flex items-center justify-center"
+              >
+                <img 
+                  src={previewImage} 
+                  alt="Fullscreen preview" 
+                  className="max-w-full max-h-full object-contain rounded-2xl shadow-2xl border border-white/5" 
+                />
+              </motion.div>
             </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
+
+      {/* ── Delete Confirmation Modal (Portaled) ── */}
+      {createPortal(
+        <AnimatePresence>
+          {deleteTarget && (
+            <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setDeleteTarget(null)}
+                className="absolute inset-0 bg-slate-900/60 dark:bg-black/85 backdrop-blur-md"
+              />
+              
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 15 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 15 }}
+                className="relative w-full max-w-sm bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800/80 rounded-3xl p-6 shadow-2xl z-10 text-center"
+              >
+                <div className="w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center mx-auto mb-4 text-rose-500">
+                  <Trash2 size={24} />
+                </div>
+                <h3 className="text-lg font-black text-slate-900 dark:text-white mb-2">
+                  {t('Confirm Delete File')}
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-6 leading-relaxed">
+                  {t('Are you sure you want to permanently delete this file? This will remove all database linkages and cannot be undone.')}
+                </p>
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setDeleteTarget(null)}
+                    disabled={isDeleting}
+                    className="flex-1 py-2.5 rounded-2xl bg-slate-100 hover:bg-slate-200 dark:bg-white/[0.04] dark:hover:bg-white/[0.08] text-slate-600 dark:text-slate-300 font-bold text-xs transition-colors disabled:opacity-40"
+                  >
+                    {t('Cancel')}
+                  </button>
+                  <button
+                    onClick={handleDeleteFile}
+                    disabled={isDeleting}
+                    className="flex-1 py-2.5 rounded-2xl bg-rose-500 hover:bg-rose-600 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-rose-500/20 disabled:opacity-40"
+                  >
+                    {isDeleting ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                    {t('Delete Permanently')}
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
 
     </div>
   );

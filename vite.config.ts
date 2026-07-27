@@ -11,6 +11,15 @@ export default defineConfig({
       'src': path.resolve(__dirname, './src'),
     },
   },
+  server: {
+    proxy: {
+      '/openrouter-api': {
+        target: 'https://openrouter.ai',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/openrouter-api/, '')
+      }
+    }
+  },
   build: {
     rollupOptions: {
       output: {

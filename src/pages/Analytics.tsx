@@ -3,9 +3,12 @@ import HeaderActions from '../components/ui/HeaderActions';
 import { useFinance } from '../context/FinanceContext';
 import { useLanguage } from '../context/LanguageContext';
 import { downloadBase64File } from '../utils/downloadHelper';
+import { generateText } from '../utils/aiService';
+
 import { motion, AnimatePresence, animate } from 'framer-motion';
 import { useSubscription } from '../context/SubscriptionContext';
 import PremiumGate from '../components/PremiumGate';
+import { useNavigate } from 'react-router-dom';
 import {
   PieChart,
   Pie,
@@ -37,6 +40,7 @@ import {
   Clock,
   CalendarDays,
   CheckCircle2,
+  Lock,
 } from 'lucide-react';
 import { isThisMonth, isThisWeek } from 'date-fns';
 import jsPDF from 'jspdf';
@@ -351,6 +355,54 @@ export default function Analytics() {
   const [timeFilter, setTimeFilter] = useState<'all' | 'month' | 'week'>('all');
   const [hoveredPieIndex, setHoveredPieIndex] = useState<number | null>(null);
   const { t } = useLanguage();
+  const navigate = useNavigate();
+
+  // If not premium, render a beautiful lock overlay with blurred mockup background
+  if (!isPremium) {
+    return (
+      <div className="relative min-h-[80vh] flex items-center justify-center p-6 z-10 animate-[fadeIn_0.2s_ease-out]">
+        {/* Mock background (or actual background blurred) */}
+        <div className="absolute inset-0 filter blur-md opacity-25 select-none pointer-events-none overflow-hidden scale-[1.02] flex flex-col justify-between p-8">
+          <div className="w-full max-w-4xl mx-auto space-y-6 pt-8">
+            <div className="h-10 bg-slate-200 dark:bg-slate-800 rounded-xl w-48" />
+            <div className="grid grid-cols-3 gap-4">
+              <div className="h-28 bg-slate-200 dark:bg-slate-800 rounded-2xl col-span-1" />
+              <div className="h-28 bg-slate-200 dark:bg-slate-800 rounded-2xl col-span-1" />
+              <div className="h-28 bg-slate-200 dark:bg-slate-800 rounded-2xl col-span-1" />
+            </div>
+            <div className="h-64 bg-slate-200 dark:bg-slate-800 rounded-3xl w-full" />
+          </div>
+        </div>
+
+        {/* Lock Card */}
+        <div className="glass-panel p-8 text-center max-w-sm w-full space-y-6 shadow-2xl relative z-20 border border-white/80 dark:border-white/[0.08] rounded-3xl bg-white/70 dark:bg-black/40 backdrop-blur-3xl">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-500/20 to-orange-500/20 backdrop-blur-xl border border-amber-500/30 flex items-center justify-center mx-auto shadow-lg shadow-amber-500/10">
+            <Lock size={30} className="text-amber-500" />
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-xl font-black text-slate-800 dark:text-slate-100">{t('Advanced Analytics')}</h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+              {t('Unlock deep insights into your family spending, category allocations, asset growth trends, and generate comprehensive PDF intelligence reports.')}
+            </p>
+          </div>
+          <div className="flex flex-col gap-3 pt-2">
+            <button
+              onClick={() => navigate('/subscription')}
+              className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 text-white font-extrabold text-xs shadow-md shadow-amber-500/25 active:scale-95 transition-all"
+            >
+              {t('Upgrade to Premium')}
+            </button>
+            <button
+              onClick={() => navigate('/')}
+              className="w-full py-3.5 rounded-2xl bg-slate-100 hover:bg-slate-200 dark:bg-white/[0.04] dark:hover:bg-white/[0.08] text-slate-700 dark:text-slate-350 font-bold text-xs transition-all"
+            >
+              {t('Go to Dashboard')}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Toast and loading states
   const [toast, setToast] = useState<{
@@ -590,11 +642,6 @@ export default function Analytics() {
       setShowUpgradeModal(true);
       return;
     }
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-    if (!apiKey) {
-      showToast(t('Gemini API key is missing'), AlertTriangle);
-      return;
-    }
 
     setIsAiAnalyzing(true);
     try {
@@ -621,22 +668,10 @@ Use 'alert' for high category spends/over-budgeting, 'success' for good savings 
 Do not wrap the JSON in markdown code blocks. Just return the raw JSON array.
 `;
 
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ role: 'user', parts: [{ text: prompt }] }],
-            generationConfig: { temperature: 0.2 }
-          })
-        }
-      );
-
-      if (!response.ok) throw new Error('Failed to generate insights from Gemini API');
-
-      const responseData = await response.json();
-      const textResponse = responseData.candidates[0].content.parts[0].text;
+      const textResponse = await generateText(prompt, {
+        temperature: 0.2,
+        responseFormatJson: true
+      });
 
       const parsed = parseGeminiJson(textResponse);
       if (Array.isArray(parsed) && parsed.length > 0) {

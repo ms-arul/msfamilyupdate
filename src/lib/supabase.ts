@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { Capacitor } from '@capacitor/core';
 import { capacitorStorage, hydrateAuthStorage } from './capacitorStorage';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -13,7 +14,7 @@ export const supabase = createClient(supabaseUrl || '', supabaseAnonKey || '', {
     storage: capacitorStorage,
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: false, // Not needed for Capacitor apps
+    detectSessionInUrl: !Capacitor.isNativePlatform(),
   },
 });
 
