@@ -1111,7 +1111,7 @@ export default function AddTransaction() {
                     </>
                   ) : (
                     <>
-                      <Send size={18} /> {t('Confirm Record')}
+                      <Send size={18} /> {t('confirm record')}
                     </>
                   )}
                 </span>
